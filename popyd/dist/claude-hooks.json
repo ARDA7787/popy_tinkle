@@ -1,0 +1,17 @@
+{
+  "_comment": "Snippet for ~/.claude/settings.json. Merge into your existing 'hooks' section. After install, replace ~/.local/share/popy/dist/popy-bash-hook.sh with your real install path.",
+
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.local/share/popy/dist/popy-bash-hook.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

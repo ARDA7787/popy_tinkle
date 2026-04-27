@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  popyd launchd user agent.
+
+  Install:
+    cp dist/com.popy.daemon.plist ~/Library/LaunchAgents/
+    # then edit the line below to point at YOUR install path
+    launchctl load   ~/Library/LaunchAgents/com.popy.daemon.plist
+    launchctl start  com.popy.daemon
+
+  Uninstall:
+    launchctl unload ~/Library/LaunchAgents/com.popy.daemon.plist
+    rm ~/Library/LaunchAgents/com.popy.daemon.plist
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+                       "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.popy.daemon</string>
+
+    <!-- EDIT THIS PATH after `cmake --install` to wherever popyd was placed.
+         Default install prefix is ~/.local, so $HOME/.local/bin/popyd. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/CHANGEME/.local/bin/popyd</string>
+    </array>
+
+    <key>RunAtLoad</key>     <true/>
+    <key>KeepAlive</key>     <true/>
+    <key>ProcessType</key>   <string>Background</string>
+
+    <!-- popyd writes its own structured log; these capture anything else. -->
+    <key>StandardOutPath</key> <string>/tmp/popyd.out.log</string>
+    <key>StandardErrorPath</key><string>/tmp/popyd.err.log</string>
+</dict>
+</plist>

@@ -201,6 +201,23 @@ The most valuable contributions right now:
 
 Apache 2.0. See [LICENSE](LICENSE). Apache was chosen over MIT specifically for its explicit patent-grant language — a small but real safeguard for contributors to a security tool.
 
+## CLI Daemon — popyd
+
+The browser extension protects browser downloads. **[popyd](popyd/README.md)** brings the same `_popy` quarantine to the command line, designed for AI CLI agents (Claude Code, Cursor, Codex). Two paths:
+
+- **`popy fetch <url>`** streams the network response straight into `<stage>/<uuid>/<name>_popy` mode `0000`. The original-extension filename never exists on disk — the OPFS-equivalent property the browser provides.
+- **`popyd`** watches `~/.popy-stage/` (excluded from Spotlight/Tracker by the installer) and renames new files to `<name>_popy` mode `0000` within ~1s.
+
+A bundled MCP server (`popyd/mcp/server.py`) exposes `popy_fetch`/`popy_list`/`popy_read_text`/`popy_release`/`popy_delete` to AI agents. A Claude Code Bash hook (`popyd/dist/popy-bash-hook.sh`) refuses direct `curl`/`wget` invocations and routes them through `popy_fetch` instead.
+
+```bash
+cmake -S popyd -B popyd/build -DCMAKE_BUILD_TYPE=Release
+cmake --build popyd/build -j
+cmake --install popyd/build --prefix ~/.local
+```
+
+Sidecar JSON mirrors the browser extension's `QuarantineRecord` field-for-field, so a future sync layer ingests them into the extension's IndexedDB with zero translation. Full design and threat model in [popyd/README.md](popyd/README.md). Plan and milestone breakdown in [plan.md](plan.md).
+
 ---
 
 <p align="center"><em>Trust files less. Trust yourself more.</em></p>

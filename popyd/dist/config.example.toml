@@ -1,0 +1,33 @@
+# popy config — copy to ~/.config/popy/config.toml. popyd seeds this file
+# on first launch if it doesn't exist, so editing this default is optional.
+
+# Master switch. `popy pause` and `popy resume` toggle a transient flag at
+# runtime instead.
+enabled = true
+
+# Watched directories. Default is the staging dir, which the installer
+# excludes from Spotlight (macOS) / Tracker / Baloo (Linux). Add ~/Downloads
+# only if you accept that watcher mode is best-effort against indexer races.
+watch_dirs = ["~/.popy-stage"]
+
+# Where `popy fetch` writes its files (always under <stage>/<uuid>/).
+stage_dir = "~/.popy-stage"
+
+# Glob patterns relative to a watch_dir; any match skips the file.
+exclude = [
+  "*_popy",
+  "*.meta.json", "*.meta.json.new",
+  "*.crdownload", "*.part", "*.download", "*.tmp",
+  ".*",
+  "**/popy-released/**",
+]
+
+# macOS FSEvents stability window. The watcher waits this long after the
+# last write event before processing, so partial downloads don't get
+# quarantined mid-stream. inotify's IN_CLOSE_WRITE is reliable so this is
+# effectively unused on Linux.
+stability_ms = 750
+
+# Caps on `popy fetch` and the (M3) preview rendering child.
+fetch_max_bytes   = 5368709120     # 5 GiB
+preview_max_bytes = 536870912      # 512 MiB

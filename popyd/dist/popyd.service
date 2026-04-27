@@ -1,0 +1,33 @@
+# popyd systemd user unit.
+#
+# Install:
+#   mkdir -p ~/.config/systemd/user
+#   cp dist/popyd.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now popyd.service
+#
+# Status / stop / logs:
+#   systemctl --user status popyd
+#   systemctl --user stop popyd
+#   journalctl --user -u popyd -f
+[Unit]
+Description=popy download quarantine daemon
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/popyd
+Restart=on-failure
+RestartSec=5
+
+# Light sandboxing — popyd only needs $HOME and (on Linux) /tmp for inotify/sockets.
+ProtectSystem=strict
+ReadWritePaths=%h
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=default.target

@@ -1,6 +1,7 @@
 node_modules/
-dist/
-.output/
+# Browser extension build output. Root-only so popyd/dist/ (service files) is kept.
+/dist/
+/.output/
 .DS_Store
 *.log
 .env
