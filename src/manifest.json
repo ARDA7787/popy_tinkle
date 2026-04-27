@@ -1,0 +1,52 @@
+{
+  "manifest_version": 3,
+  "name": "Popy — Download Quarantine",
+  "short_name": "Popy",
+  "version": "0.1.0",
+  "description": "Every download lands in an isolated sandbox, renamed with _popy, and cannot be opened until you release it.",
+  "minimum_chrome_version": "116",
+  "background": {
+    "service_worker": "src/background/background.ts",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_title": "Popy — click to review quarantined downloads",
+    "default_icon": {
+      "16": "public/icons/icon-16.png",
+      "32": "public/icons/icon-32.png",
+      "48": "public/icons/icon-48.png",
+      "128": "public/icons/icon-128.png"
+    }
+  },
+  "icons": {
+    "16": "public/icons/icon-16.png",
+    "32": "public/icons/icon-32.png",
+    "48": "public/icons/icon-48.png",
+    "128": "public/icons/icon-128.png"
+  },
+  "commands": {
+    "open-dashboard": {
+      "suggested_key": {
+        "default": "Alt+Shift+P",
+        "mac": "Alt+Shift+P"
+      },
+      "description": "Open the Popy quarantine dashboard"
+    }
+  },
+  "permissions": [
+    "downloads",
+    "downloads.ui",
+    "offscreen",
+    "storage",
+    "notifications",
+    "declarativeNetRequest",
+    "webRequest",
+    "unlimitedStorage",
+    "alarms"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' data:"
+  }
+}

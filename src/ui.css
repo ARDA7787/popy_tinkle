@@ -1,0 +1,240 @@
+/*
+ * Popy design system.
+ *
+ * Mood: dark editorial; a museum catalog for files.
+ * Palette: ink, bone, rust — colors that predate the internet.
+ * Type: a humanist serif for everything that has an opinion,
+ *       a grotesque monospace for everything that is a fact.
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap");
+
+:root {
+  --ink: #18181a;
+  --ink-soft: #24242a;
+  --ink-line: #2e2e36;
+  --bone: #f5f0e4;
+  --bone-soft: #e8e1d1;
+  --bone-dim: #a9a395;
+  --rust: #b84a2f;
+  --rust-soft: #d67858;
+  --amber: #d6a24a;
+  --sage: #6a8a6a;
+
+  --serif: "Fraunces", "Iowan Old Style", "Georgia", serif;
+  --mono: "JetBrains Mono", "SF Mono", "Menlo", monospace;
+
+  --radius-sm: 2px;
+  --radius: 3px;
+  --radius-lg: 6px;
+
+  --shadow: 0 1px 0 rgba(0, 0, 0, 0.4), 0 16px 40px -16px rgba(0, 0, 0, 0.6);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  background: var(--ink);
+  color: var(--bone);
+  font-family: var(--serif);
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: 0.003em;
+}
+
+a {
+  color: var(--rust-soft);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+}
+a:hover {
+  color: var(--bone);
+}
+
+code,
+.mono {
+  font-family: var(--mono);
+  font-size: 0.85em;
+  letter-spacing: 0;
+}
+
+button {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 7px 12px;
+  background: transparent;
+  color: var(--bone);
+  border: 1px solid var(--ink-line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition:
+    border-color 120ms,
+    color 120ms,
+    background 120ms;
+}
+button:hover {
+  border-color: var(--bone-dim);
+}
+button.primary {
+  background: var(--rust);
+  border-color: var(--rust);
+  color: var(--bone);
+}
+button.primary:hover {
+  background: var(--rust-soft);
+  border-color: var(--rust-soft);
+}
+button.ghost {
+  border-color: transparent;
+  color: var(--bone-dim);
+}
+button.ghost:hover {
+  color: var(--bone);
+}
+button.danger {
+  color: var(--rust-soft);
+}
+button.danger:hover {
+  border-color: var(--rust);
+  color: var(--bone);
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+input,
+select {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--ink-soft);
+  color: var(--bone);
+  border: 1px solid var(--ink-line);
+  border-radius: var(--radius);
+  padding: 7px 10px;
+  outline: none;
+}
+input:focus,
+select:focus {
+  border-color: var(--rust);
+}
+
+/* Fine numeric-tabular digits for sizes, timestamps, hashes */
+.nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The hairline rule we use everywhere */
+.rule {
+  height: 1px;
+  background: var(--ink-line);
+  margin: 16px 0;
+}
+
+/* Headings */
+h1,
+h2,
+h3 {
+  font-family: var(--serif);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+h1 {
+  font-size: 34px;
+  line-height: 1.1;
+}
+h2 {
+  font-size: 22px;
+}
+h3 {
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--bone-dim);
+  font-family: var(--mono);
+  font-weight: 500;
+}
+
+/* A label pill — used for status dots */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bone-dim);
+}
+.pill::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--bone-dim);
+}
+.pill.stored::before {
+  background: var(--amber);
+}
+.pill.fetching::before {
+  background: var(--sage);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.pill.released::before {
+  background: var(--sage);
+}
+.pill.failed::before,
+.pill.fallback::before {
+  background: var(--rust);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--ink);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--ink-line);
+  border-radius: var(--radius);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--bone-dim);
+}
+
+/* Newsprint paper accent — used sparingly as a contrasting panel */
+.bone-panel {
+  background: var(--bone);
+  color: var(--ink);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+}
+.bone-panel h2,
+.bone-panel h1 {
+  color: var(--ink);
+}

@@ -1,0 +1,236 @@
+body {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  background: var(--ink);
+  background-image:
+    radial-gradient(ellipse at top, rgba(184, 74, 47, 0.08), transparent 55%),
+    radial-gradient(ellipse at bottom left, rgba(214, 162, 74, 0.04), transparent 50%);
+}
+
+.stage {
+  max-width: 720px;
+  width: 100%;
+  padding: 80px 40px 120px;
+}
+
+/* ─── HERO ─── */
+
+.hero {
+  margin-bottom: 96px;
+  border-bottom: 1px solid var(--ink-line);
+  padding-bottom: 56px;
+}
+.preamble {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: var(--rust-soft);
+  margin-bottom: 28px;
+}
+h1 {
+  font-family: var(--serif);
+  font-size: 68px;
+  font-weight: 600;
+  line-height: 1.04;
+  letter-spacing: -0.032em;
+  margin-bottom: 32px;
+}
+h1 em {
+  font-style: italic;
+  font-weight: 400;
+  color: var(--rust-soft);
+}
+.lede {
+  font-family: var(--serif);
+  font-size: 19px;
+  line-height: 1.55;
+  color: var(--bone-soft);
+  max-width: 52ch;
+}
+.nowrap {
+  white-space: nowrap;
+  color: var(--bone-dim);
+  font-style: italic;
+}
+
+/* ─── CHAPTERS ─── */
+
+.chapter {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 8px 40px;
+  margin-bottom: 72px;
+  animation: rise 800ms ease backwards;
+}
+.chapter:nth-child(2) {
+  animation-delay: 100ms;
+}
+.chapter:nth-child(3) {
+  animation-delay: 200ms;
+}
+.chapter:nth-child(4) {
+  animation-delay: 300ms;
+}
+.chapter:nth-child(5) {
+  animation-delay: 400ms;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.chapter-num {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 54px;
+  font-weight: 400;
+  color: var(--rust);
+  line-height: 1;
+  padding-top: 6px;
+}
+.chapter-body h2 {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 30px;
+  letter-spacing: -0.018em;
+  margin-bottom: 16px;
+}
+.chapter-body p {
+  font-family: var(--serif);
+  font-size: 17px;
+  line-height: 1.65;
+  color: var(--bone-soft);
+  max-width: 54ch;
+  margin-bottom: 14px;
+}
+.chapter-body p:last-child {
+  margin-bottom: 0;
+}
+.chapter-body code {
+  padding: 1px 6px;
+  background: var(--ink-soft);
+  border: 1px solid var(--ink-line);
+  border-radius: 2px;
+  font-size: 0.82em;
+}
+
+.chapter.honest {
+  border-top: 1px solid var(--ink-line);
+  padding-top: 72px;
+  margin-top: 120px;
+}
+.chapter.honest .chapter-num {
+  color: var(--bone-dim);
+}
+
+/* ─── DIAGRAM ─── */
+
+.diagram {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+  padding: 20px 24px;
+  background: var(--ink-soft);
+  border: 1px solid var(--ink-line);
+  border-radius: var(--radius);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.d-step {
+  padding: 6px 12px;
+  border: 1px solid var(--ink-line);
+  border-radius: var(--radius);
+  color: var(--bone-dim);
+}
+.d-step.d-active {
+  border-color: var(--rust);
+  color: var(--bone);
+  box-shadow: 0 0 0 1px var(--rust);
+}
+.d-step.d-muted {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+.d-arrow {
+  color: var(--rust-soft);
+  font-size: 16px;
+}
+.d-arrow.d-muted {
+  color: var(--bone-dim);
+  opacity: 0.5;
+}
+
+/* ─── SHIELD LIST ─── */
+
+.shield-list {
+  list-style: none;
+  margin-top: 20px;
+  padding: 20px 24px;
+  background: var(--ink-soft);
+  border-left: 2px solid var(--rust);
+}
+.shield-list li {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.9;
+  color: var(--bone-soft);
+  letter-spacing: 0.02em;
+}
+.shield-list li .mono {
+  color: var(--rust-soft);
+  margin-right: 8px;
+}
+
+.aside {
+  margin-top: 18px;
+  padding: 14px 20px;
+  background: var(--ink-soft);
+  border-left: 2px solid var(--amber);
+  color: var(--bone-dim) !important;
+  font-family: var(--mono) !important;
+  font-size: 11px !important;
+  line-height: 1.6 !important;
+}
+
+/* ─── CTA ─── */
+
+.cta {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-top: 56px;
+  padding-top: 40px;
+  border-top: 1px solid var(--ink-line);
+}
+.cta .primary {
+  padding: 14px 24px;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+}
+.cta a {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--bone-dim);
+  text-decoration: none;
+  border-bottom: 1px solid var(--ink-line);
+  padding-bottom: 2px;
+  transition: color 120ms, border-color 120ms;
+}
+.cta a:hover {
+  color: var(--rust-soft);
+  border-color: var(--rust);
+}

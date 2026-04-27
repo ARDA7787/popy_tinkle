@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Popy — Quarantine</title>
+    <link rel="stylesheet" href="../ui.css" />
+    <link rel="stylesheet" href="./dashboard.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="wordmark">Popy</div>
+          <div class="mono subtitle">download quarantine</div>
+        </div>
+
+        <nav>
+          <button class="nav-item active" data-view="all">
+            <span class="nav-label">Quarantined</span>
+            <span class="mono count" id="count-all">0</span>
+          </button>
+          <button class="nav-item" data-view="fetching">
+            <span class="nav-label">Streaming</span>
+            <span class="mono count" id="count-fetching">0</span>
+          </button>
+          <button class="nav-item" data-view="history">
+            <span class="nav-label">History</span>
+          </button>
+          <button class="nav-item" data-view="settings">
+            <span class="nav-label">Settings</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="quota-block">
+            <div class="mono hdr">Sandbox usage</div>
+            <div class="quota-bar"><span id="quota-fill"></span></div>
+            <div class="mono quota-text" id="quota-text">—</div>
+          </div>
+          <div class="mono dim version" id="version">v0.1.0</div>
+        </div>
+      </aside>
+
+      <main>
+        <!-- ALL / QUARANTINED -->
+        <section class="view" data-view="all">
+          <header class="view-head">
+            <div>
+              <h1>Quarantined</h1>
+              <p class="dim">
+                Files held in Popy's sandbox. None of these have touched
+                your filesystem. Release the ones you want to keep.
+              </p>
+            </div>
+            <div class="tools">
+              <input id="search" placeholder="Search filename or host" />
+              <select id="filter-host"><option value="">All origins</option></select>
+              <button id="bulk-delete" class="ghost" title="Delete every quarantined file shown">Delete all</button>
+            </div>
+          </header>
+          <div class="list" id="list-all"></div>
+        </section>
+
+        <section class="view hidden" data-view="fetching">
+          <header class="view-head">
+            <h1>Streaming</h1>
+            <p class="dim">Downloads currently being pulled into the sandbox.</p>
+          </header>
+          <div class="list" id="list-fetching"></div>
+        </section>
+
+        <section class="view hidden" data-view="history">
+          <header class="view-head">
+            <h1>History</h1>
+            <p class="dim">Released and deleted files — kept for reference.</p>
+          </header>
+          <div class="list" id="list-history"></div>
+        </section>
+
+        <section class="view hidden" data-view="settings">
+          <header class="view-head">
+            <h1>Settings</h1>
+            <p class="dim">Everything Popy does, configurable.</p>
+          </header>
+          <div class="settings" id="settings-body"></div>
+        </section>
+
+        <!-- Detail drawer — slides in from the right when a record is selected -->
+        <aside class="drawer hidden" id="drawer">
+          <button class="ghost close" id="drawer-close">× Close</button>
+          <div id="drawer-body"></div>
+        </aside>
+      </main>
+    </div>
+
+    <script type="module" src="./dashboard.ts"></script>
+  </body>
+</html>

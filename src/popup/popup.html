@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Popy</title>
+    <link rel="stylesheet" href="../ui.css" />
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <header>
+      <div class="mark">
+        <span class="wordmark">Popy</span>
+        <span class="subtitle mono">download quarantine</span>
+      </div>
+      <button class="ghost" id="open-dashboard" title="Open full dashboard">Dashboard ↗</button>
+    </header>
+
+    <main id="list" aria-live="polite">
+      <div class="empty">
+        <p>Nothing quarantined.</p>
+        <p class="mono dim">
+          Popy is watching. New downloads will appear here, isolated, until you release them.
+        </p>
+      </div>
+    </main>
+
+    <footer>
+      <span class="mono dim" id="quota">—</span>
+      <button class="ghost" id="open-settings">Settings</button>
+    </footer>
+
+    <script type="module" src="./popup.ts"></script>
+  </body>
+</html>

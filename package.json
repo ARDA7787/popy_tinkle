@@ -1,0 +1,35 @@
+{
+  "name": "popy",
+  "version": "0.1.0",
+  "description": "A browser download quarantine — every file lands in an isolated OPFS sandbox, renamed with _popy, and cannot be opened until you release it.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ARDA7787/popy_tinkle.git"
+  },
+  "scripts": {
+    "dev": "vite build --watch --mode development",
+    "build": "vite build",
+    "build:zip": "vite build && cd dist && zip -r ../popy-$npm_package_version.zip .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:watch": "vitest",
+    "format": "prettier --write \"src/**/*.{ts,tsx,html,css}\""
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.0.0",
+    "@types/chrome": "^0.0.287",
+    "@types/node": "^22.9.0",
+    "@vitest/ui": "^2.1.8",
+    "fake-indexeddb": "^6.0.0",
+    "happy-dom": "^15.11.7",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.2",
+    "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "hash-wasm": "^4.11.0",
+    "idb": "^8.0.0"
+  }
+}

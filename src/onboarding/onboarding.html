@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Welcome to Popy</title>
+    <link rel="stylesheet" href="../ui.css" />
+    <link rel="stylesheet" href="./onboarding.css" />
+  </head>
+  <body>
+    <main class="stage">
+      <article class="hero">
+        <div class="preamble mono">an introduction in three acts</div>
+        <h1>
+          Your downloads, <em>paused</em>
+          <br />
+          on the threshold.
+        </h1>
+        <p class="lede">
+          Popy puts every file you download into a sealed sandbox
+          <span class="nowrap">— invisible to your operating system —</span>
+          and renames it so nothing can execute it by accident.
+          It waits there, harmless, until you release it.
+        </p>
+      </article>
+
+      <section class="chapter">
+        <div class="chapter-num">I.</div>
+        <div class="chapter-body">
+          <h2>A file arrives.</h2>
+          <p>
+            When something tries to download — a PDF, an installer, an image, anything —
+            Popy catches it in mid-air. It streams the bytes into the browser's
+            <strong>Origin Private File System</strong>, a storage area your OS can't see.
+            The file gets a <code>_popy</code> suffix so even if it somehow slipped out,
+            nothing would know how to open it.
+          </p>
+          <div class="diagram" aria-hidden="true">
+            <span class="d-step">server</span>
+            <span class="d-arrow">→</span>
+            <span class="d-step d-active">Popy sandbox</span>
+            <span class="d-arrow d-muted">⊘</span>
+            <span class="d-step d-muted">your filesystem</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="chapter">
+        <div class="chapter-num">II.</div>
+        <div class="chapter-body">
+          <h2>Nothing can touch it.</h2>
+          <p>
+            While the file sits in the sandbox, Windows can't index it, macOS can't
+            preview it, your antivirus's on-access scanner can't even see it.
+            The most dangerous thing a file can do — be parsed by a vulnerable
+            operating-system handler the instant it lands — simply cannot happen.
+          </p>
+          <ul class="shield-list">
+            <li><span class="mono">◦</span> No double-click execution</li>
+            <li><span class="mono">◦</span> No thumbnail-parser attacks</li>
+            <li><span class="mono">◦</span> No preview-handler exploits</li>
+            <li><span class="mono">◦</span> No Spotlight / Windows Search indexing</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="chapter">
+        <div class="chapter-num">III.</div>
+        <div class="chapter-body">
+          <h2>You decide what happens.</h2>
+          <p>
+            From Popy's dashboard you can look the file over, preview PDFs and images
+            safely in the browser, check its SHA-256 against VirusTotal, then
+            <strong>release</strong> it to a location you choose — or
+            <strong>delete</strong> it forever. Releasing strips the <code>_popy</code>
+            suffix; deleting is instant and complete.
+          </p>
+          <p class="aside mono">
+            You will never again wonder whether that thing you downloaded
+            an hour ago has been quietly parsed by something.
+          </p>
+        </div>
+      </section>
+
+      <section class="chapter honest">
+        <div class="chapter-num">·</div>
+        <div class="chapter-body">
+          <h2>Some honesty before you start.</h2>
+          <p>
+            Popy is not an antivirus. It does not scan files for malicious content.
+            What it does is simpler and, in practice, more reliable: it refuses to
+            let the operating system near a downloaded file until you say so.
+          </p>
+          <p>
+            For a minority of downloads — ones created by JavaScript in the page,
+            ones behind single-use confirmation tokens, ones larger than the
+            sandbox can hold — Popy falls back to a second line of defense:
+            saving the file with a <code>_popy</code> suffix in a dedicated
+            quarantine folder. It's still defused, but it lives on your disk.
+            You'll always see which path was taken.
+          </p>
+        </div>
+      </section>
+
+      <footer class="cta">
+        <button class="primary" id="done">I understand. Begin.</button>
+        <a href="#" id="docs">Read the threat model →</a>
+      </footer>
+    </main>
+
+    <script type="module" src="./onboarding.ts"></script>
+  </body>
+</html>
