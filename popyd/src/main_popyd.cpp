@@ -165,6 +165,10 @@ void catchup_scan(const popy::config::Config& cfg, PathQueue& q) {
 int main(int /*argc*/, char** /*argv*/) {
   popy::log::open_file(popy::paths::log_file().string());
   popy::log::info("popyd starting");
+  popy::log::info("popyd startup: mode=watcher enforcement_mode=strict "
+                  "guarantee_level=best_effort");
+  std::cout << "popyd startup: mode=watcher enforcement_mode=strict "
+               "guarantee_level=best_effort\n";
 
   popy::config::Config cfg;
   try {

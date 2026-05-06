@@ -203,10 +203,10 @@ Apache 2.0. See [LICENSE](LICENSE). Apache was chosen over MIT specifically for 
 
 ## CLI Daemon — popyd
 
-The browser extension protects browser downloads. **[popyd](popyd/README.md)** brings the same `_popy` quarantine to the command line, designed for AI CLI agents (Claude Code, Cursor, Codex). Two paths:
+The browser extension protects browser downloads. **[popyd](popyd/README.md)** brings the same `_popy` quarantine to the command line, designed for AI CLI agents (Claude Code, Cursor, Codex).
 
-- **`popy fetch <url>`** streams the network response straight into `<stage>/<uuid>/<name>_popy` mode `0000`. The original-extension filename never exists on disk — the OPFS-equivalent property the browser provides.
-- **`popyd`** watches `~/.popy-stage/` (excluded from Spotlight/Tracker by the installer) and renames new files to `<name>_popy` mode `0000` within ~1s.
+- **Guaranteed path (`popy fetch`)**: direct-stream fetch/write where the first on-disk name is `<name>.<ext>_popy` in `<stage>/<uuid>/`, mode `0000`.
+- **Best-effort path (`popyd` watcher mode)**: monitor `~/.popy-stage/` (excluded from Spotlight/Tracker by the installer) and rename after create to `<name>_popy` mode `0000` within ~1s.
 
 A bundled MCP server (`popyd/mcp/server.py`) exposes `popy_fetch`/`popy_list`/`popy_read_text`/`popy_release`/`popy_delete` to AI agents. A Claude Code Bash hook (`popyd/dist/popy-bash-hook.sh`) refuses direct `curl`/`wget` invocations and routes them through `popy_fetch` instead.
 

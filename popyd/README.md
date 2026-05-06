@@ -12,11 +12,11 @@ indexes it. The on-access AV scanner reads it. Preview handlers may parse
 it. A misclick or `bash -c "open ./payload"` runs it. None of those should
 happen for a file the agent has not yet inspected.
 
-popy gives the agent two paths:
+popy separates two enforcement paths:
 
-| | **Mode A — `popy fetch`**  *(recommended, strong)* | **Mode B — `popyd` watcher**  *(best-effort)* |
+| | **Guaranteed path — `popy fetch`**  *(recommended)* | **Best-effort path — `popyd` watcher mode** |
 |---|---|---|
-| How | Stream the network response straight into `<stage>/<uuid>/<name>_popy` opened with `O_CREAT \| O_EXCL`. Mode `0000` from the moment the fd is created. | Watch a directory; when a file appears, atomically rename it to `<name>_popy` and `chmod 0000`. |
+| How | Stream the network response straight into `<stage>/<uuid>/<name>.<ext>_popy` opened with `O_CREAT \| O_EXCL`. Mode `0000` from the moment the fd is created. | Watch a directory; when a file appears, atomically rename it to `<name>_popy` and `chmod 0000`. |
 | Original-extension filename ever exists on disk? | **No.** | Yes — for the milliseconds between create and rename. |
 | Stops OS handlers / preview / AV scanners? | **Yes.** | Best-effort. The watch dir is excluded from Spotlight/Tracker by the installer. |
 | AI agent uses via | `popy_fetch` MCP tool, or `popy fetch <url>` from a Bash hook. | Drops files into `~/.popy-stage/` as a side effect of any tool that writes there. |
@@ -100,6 +100,11 @@ popy pause | popy resume                         # transient; cleared on daemon 
 popy config [--print] [--path]
 ```
 
+`popy status --json` includes enforcement reporting fields:
+- `enforcement_mode`: `strict` | `popy_only` | `off`
+- `guarantee_level`: `guaranteed` | `best_effort`
+- `bypass_surface`: list of known non-enforced channels
+
 Quick smoke:
 
 ```bash
@@ -171,7 +176,7 @@ What popyd **does not** stop:
 
 ```
 agent → popy fetch <url>                 ─┐
-                                          │  Mode A: file's first existence
+                                          │  Guaranteed path: file's first existence
         ┌─────────────────────────────┐   │  on disk is already _popy 0000.
         │ libcurl streaming GET       │   │  Original-extension filename
         │   ↳ 16-byte magic probe     │   │  never appears.
@@ -183,7 +188,7 @@ agent → popy fetch <url>                 ─┐
         └─────────────────────────────┘  ─┘
 
 writer → ~/.popy-stage/foo.pdf           ─┐
-                                          │  Mode B: watcher renames in place
+                                          │  Best-effort path: watcher renames in place
         ┌─────────────────────────────┐   │  the moment FSEvents/inotify
         │ FSEvents (macOS) / inotify  │   │  reports the file is stable.
         │ stability: 750ms quiet      │   │

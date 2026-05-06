@@ -297,13 +297,26 @@ int cmd_status(const Args& a) {
     catch (...) { /* malformed; ignore */ }
   }
 
+  const bool daemon_running = !daemon_obj.is_null();
+  const std::string enforcement_mode = daemon_running ? "strict" : "popy_only";
+  const std::string guarantee_level = daemon_running ? "best_effort"
+                                                     : "guaranteed";
+  json bypass_surface = json::array();
+  bypass_surface.push_back(
+      "native downloads outside popy fetch are unenforced when daemon is off");
+  bypass_surface.push_back(
+      "new files outside configured watch_dirs are not quarantined by watcher");
+
   json j = {
-      {"daemonRunning", !daemon_obj.is_null()},
+      {"daemonRunning", daemon_running},
       {"daemon",        daemon_obj},
       {"stageDir",      cfg.stage_dir.string()},
       {"watchDirs",     [&] { json arr; for (auto& w : cfg.watch_dirs) arr.push_back(w.string()); return arr; }()},
       {"fileCount",     entries.size()},
       {"totalBytes",    total},
+      {"enforcement_mode", enforcement_mode},
+      {"guarantee_level", guarantee_level},
+      {"bypass_surface", bypass_surface},
   };
   if (has_flag(a, "json")) {
     std::cout << j.dump(2) << "\n";
