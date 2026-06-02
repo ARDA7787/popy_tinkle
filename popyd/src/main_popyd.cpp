@@ -162,7 +162,7 @@ void catchup_scan(const popy::config::Config& cfg, PathQueue& q) {
 
 }  // namespace
 
-int main(int /*argc*/, char** /*argv*/) {
+int daemon_main() {
   popy::log::open_file(popy::paths::log_file().string());
   popy::log::info("popyd starting");
 
@@ -250,4 +250,18 @@ int main(int /*argc*/, char** /*argv*/) {
   if (proc.joinable()) proc.join();
   status_srv.stop();
   return 0;
+}
+
+int main(int /*argc*/, char** /*argv*/) {
+  try {
+    return daemon_main();
+  } catch (const std::exception& e) {
+    std::cerr << "popyd: " << e.what() << "\n";
+    popy::log::error(e.what());
+    return 1;
+  } catch (...) {
+    std::cerr << "popyd: unknown fatal error\n";
+    popy::log::error("unknown fatal error");
+    return 1;
+  }
 }

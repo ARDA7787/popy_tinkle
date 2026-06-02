@@ -118,6 +118,7 @@ int main() {
     opts.url           = srv.url("report.pdf");
     opts.stage_dir     = stage;
     opts.expected_mime = "application/pdf";
+    opts.allow_private_network = true;
 
     auto res = popy::net::fetch(opts);
 
@@ -152,12 +153,27 @@ int main() {
     opts.url           = bad.url("report.pdf");
     opts.stage_dir     = stage;
     opts.expected_mime = "application/pdf";
+    opts.allow_private_network = true;
 
     bool threw = false;
     try { popy::net::fetch(opts); }
     catch (const std::exception&) { threw = true; }
     POPY_EXPECT(threw);
     bad.shut();
+  };
+
+  POPY_RUN("SSRF guard rejects loopback by default") {
+    popy::net::FetchOptions opts;
+    opts.url           = srv.url("report.pdf");
+    opts.stage_dir     = stage;
+    opts.expected_mime = "application/pdf";
+
+    bool threw = false;
+    try { popy::net::fetch(opts); }
+    catch (const std::exception& e) {
+      threw = std::string(e.what()).find("SSRF") != std::string::npos;
+    }
+    POPY_EXPECT(threw);
   };
 
   srv.shut();

@@ -1,10 +1,14 @@
 #include "cli/commands.h"
 
 #include <fcntl.h>
+#include <poll.h>
+#include <signal.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <cerrno>
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -16,7 +20,12 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
+
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#endif
 
 #include "core/config.h"
 #include "core/log.h"
@@ -120,6 +129,238 @@ Run `popy <command> --help` for command-specific help.
 )";
 }
 
+bool is_text_mime(const std::string& mime) {
+  return mime.rfind("text/", 0) == 0 ||
+         mime == "application/json" ||
+         mime == "application/xml" ||
+         mime == "application/yaml" ||
+         mime == "application/toml" ||
+         mime == "application/javascript";
+}
+
+bool renderable_mime(const std::string& mime) {
+  return mime == "application/pdf" || mime.rfind("image/", 0) == 0;
+}
+
+fs::path current_exe_dir() {
+#if defined(__linux__)
+  char buf[4096];
+  ssize_t n = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+  if (n > 0) {
+    buf[n] = '\0';
+    return fs::path(buf).parent_path();
+  }
+#elif defined(__APPLE__)
+  char buf[4096];
+  uint32_t size = sizeof(buf);
+  if (_NSGetExecutablePath(buf, &size) == 0) {
+    std::error_code ec;
+    return fs::canonical(fs::path(buf), ec).parent_path();
+  }
+#endif
+  return fs::current_path();
+}
+
+fs::path render_binary_path() {
+  fs::path sibling = current_exe_dir() / "popy-render";
+  std::error_code ec;
+  if (fs::exists(sibling, ec)) return sibling;
+  return fs::path("popy-render");
+}
+
+void write_all_fd(int fd, const char* data, size_t len) {
+  size_t off = 0;
+  while (off < len) {
+    ssize_t n = ::write(fd, data + off, len - off);
+    if (n < 0) {
+      if (errno == EINTR) continue;
+      throw std::runtime_error(std::string("write failed: ") +
+                               std::strerror(errno));
+    }
+    off += static_cast<size_t>(n);
+  }
+}
+
+void stream_fd_to_stdout(int fd) {
+  char buf[64 * 1024];
+  while (true) {
+    ssize_t n = ::read(fd, buf, sizeof(buf));
+    if (n == 0) break;
+    if (n < 0) {
+      if (errno == EINTR) continue;
+      throw std::runtime_error(std::string("read failed: ") +
+                               std::strerror(errno));
+    }
+    write_all_fd(STDOUT_FILENO, buf, static_cast<size_t>(n));
+  }
+}
+
+class QuarantineReadable {
+ public:
+  explicit QuarantineReadable(const fs::path& path) : path_(path) {
+    // Opening an already-closed 0000 quarantine file is the only unavoidable
+    // path step here; after this point permission changes are fd-scoped.
+    if (::chmod(path_.c_str(), 0400) != 0) {
+      throw std::runtime_error("popy read: chmod 0400 failed: " +
+                               std::string(std::strerror(errno)));
+    }
+    fd_ = ::open(path_.c_str(), O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+    if (fd_ < 0) {
+      int e = errno;
+      ::chmod(path_.c_str(), 0000);
+      throw std::runtime_error("popy read: open failed: " +
+                               std::string(std::strerror(e)));
+    }
+    if (::fchmod(fd_, 0400) != 0) {
+      close_restore();
+      throw std::runtime_error("popy read: fchmod 0400 failed: " +
+                               std::string(std::strerror(errno)));
+    }
+  }
+
+  QuarantineReadable(const QuarantineReadable&) = delete;
+  QuarantineReadable& operator=(const QuarantineReadable&) = delete;
+
+  ~QuarantineReadable() { close_restore(); }
+
+  int fd() const { return fd_; }
+
+ private:
+  void close_restore() {
+    if (fd_ >= 0) {
+      if (::fchmod(fd_, 0000) != 0) {
+        popy::log::warn(std::string("popy read: fchmod 0000 failed: ") +
+                        std::strerror(errno));
+      }
+      ::close(fd_);
+      fd_ = -1;
+    } else if (!path_.empty()) {
+      ::chmod(path_.c_str(), 0000);
+    }
+  }
+
+  fs::path path_;
+  int fd_ = -1;
+};
+
+int render_via_child(const popy::store::Entry& e, const std::string& mode,
+                     int page_num) {
+  QuarantineReadable readable(e.popy_path);
+
+  int child_stdin[2] = {-1, -1};
+  int child_stdout[2] = {-1, -1};
+  if (::pipe(child_stdin) != 0 || ::pipe(child_stdout) != 0) {
+    throw std::runtime_error("popy read: pipe failed");
+  }
+
+  pid_t pid = ::fork();
+  if (pid < 0) {
+    throw std::runtime_error("popy read: fork failed");
+  }
+
+  if (pid == 0) {
+    ::dup2(child_stdin[0], STDIN_FILENO);
+    ::dup2(child_stdout[1], STDOUT_FILENO);
+    ::dup2(readable.fd(), 3);
+    ::close(child_stdin[0]);
+    ::close(child_stdin[1]);
+    ::close(child_stdout[0]);
+    ::close(child_stdout[1]);
+    fs::path render = render_binary_path();
+    ::execl(render.c_str(), render.c_str(), static_cast<char*>(nullptr));
+    std::string error = json{{"ok", false},
+                             {"error", std::string("exec popy-render failed: ") +
+                                           std::strerror(errno)}}.dump() + "\n";
+    write_all_fd(STDOUT_FILENO, error.data(), error.size());
+    _exit(127);
+  }
+
+  ::close(child_stdin[0]);
+  ::close(child_stdout[1]);
+
+  json command = {
+      {"mode", mode},
+      {"mime", e.record.mime},
+      {"page", page_num},
+      {"fd", 3},
+  };
+  std::string line = command.dump() + "\n";
+  write_all_fd(child_stdin[1], line.data(), line.size());
+  ::close(child_stdin[1]);
+
+  std::string header;
+  bool saw_header = false;
+  bool child_ok = false;
+  std::string child_error;
+  auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+
+  char buf[16 * 1024];
+  while (true) {
+    auto now = std::chrono::steady_clock::now();
+    if (now >= deadline) {
+      ::kill(pid, SIGKILL);
+      ::close(child_stdout[0]);
+      ::waitpid(pid, nullptr, 0);
+      std::cerr << "popy read: renderer timed out\n";
+      return 1;
+    }
+    auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+        deadline - now);
+    struct pollfd pfd {};
+    pfd.fd = child_stdout[0];
+    pfd.events = POLLIN;
+    int pr = ::poll(&pfd, 1, static_cast<int>(remaining.count()));
+    if (pr < 0) {
+      if (errno == EINTR) continue;
+      throw std::runtime_error("popy read: poll failed");
+    }
+    if (pr == 0) continue;
+
+    ssize_t n = ::read(child_stdout[0], buf, sizeof(buf));
+    if (n == 0) break;
+    if (n < 0) {
+      if (errno == EINTR) continue;
+      throw std::runtime_error("popy read: renderer read failed");
+    }
+
+    std::string_view chunk(buf, static_cast<size_t>(n));
+    if (!saw_header) {
+      auto nl = chunk.find('\n');
+      if (nl == std::string_view::npos) {
+        header.append(chunk);
+        continue;
+      }
+      header.append(chunk.substr(0, nl));
+      json reply = json::parse(header);
+      child_ok = reply.value("ok", false);
+      child_error = reply.value("error", "");
+      saw_header = true;
+      if (!child_ok) continue;
+      auto payload = chunk.substr(nl + 1);
+      if (!payload.empty()) write_all_fd(STDOUT_FILENO, payload.data(), payload.size());
+    } else if (child_ok) {
+      write_all_fd(STDOUT_FILENO, chunk.data(), chunk.size());
+    }
+  }
+
+  ::close(child_stdout[0]);
+  int status = 0;
+  ::waitpid(pid, &status, 0);
+  if (!saw_header) {
+    std::cerr << "popy read: renderer produced no response\n";
+    return 1;
+  }
+  if (!child_ok) {
+    std::cerr << "popy read: " << child_error << "\n";
+    return 1;
+  }
+  if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+    std::cerr << "popy read: renderer exited abnormally\n";
+    return 1;
+  }
+  return 0;
+}
+
 // ----------------------------------------------------------------------------
 // Subcommands
 // ----------------------------------------------------------------------------
@@ -170,7 +411,7 @@ int cmd_list(const Args& a) {
   auto entries = popy::store::list(cfg);
   if (has_flag(a, "json")) {
     json arr = json::array();
-    for (auto& e : entries) arr.push_back(record_to_json(e.record));
+    for (const auto& e : entries) arr.push_back(record_to_json(e.record));
     std::cout << arr.dump(2) << "\n";
   } else {
     if (entries.empty()) { std::cout << "(no quarantined files)\n"; return 0; }
@@ -228,33 +469,34 @@ int cmd_read(const Args& a) {
   auto cfg = popy::config::load_default_path();
   auto e = popy::store::resolve(cfg, a.positional[0]);
   std::string mode = opt_str(a, "mode").value_or("raw");
-
-  if (mode == "raw" || mode == "text") {
-    // Open the popy file (chmod 0000) — we own it, opening read still works
-    // on macOS/Linux because mode-checks happen on open(O_RDONLY) but the
-    // owner ignores its own permissions on macOS HFS+/APFS. To be safe and
-    // portable, briefly chmod 0400, dump, then chmod 0000 back.
-    if (::chmod(e.popy_path.c_str(), 0400) != 0) {
-      std::cerr << "popy read: chmod 0400 failed\n"; return 1;
-    }
-    int fd = ::open(e.popy_path.c_str(), O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
-    if (fd < 0) { std::cerr << "popy read: open failed\n"; return 1; }
-    char buf[64 * 1024];
-    while (true) {
-      auto n = ::read(fd, buf, sizeof(buf));
-      if (n == 0) break;
-      if (n < 0) { ::close(fd); ::chmod(e.popy_path.c_str(), 0000); return 1; }
-      ::write(STDOUT_FILENO, buf, static_cast<size_t>(n));
-    }
-    ::close(fd);
-    ::chmod(e.popy_path.c_str(), 0000);
-    return 0;
+  int page_num = 0;
+  if (auto page = opt_str(a, "page")) {
+    page_num = std::stoi(*page);
   }
 
   if (mode == "png") {
-    std::cerr << "popy read --mode png: rendering requires popy-render "
-                 "(install libmupdf and rebuild)\n";
-    return 3;  // unsupported_type
+    if (!renderable_mime(e.record.mime)) {
+      std::cerr << "popy read --mode png: unsupported mime '" << e.record.mime
+                << "'\n";
+      return 3;
+    }
+    return render_via_child(e, mode, page_num);
+  }
+
+  if (mode == "text" && e.record.mime == "application/pdf") {
+    return render_via_child(e, mode, page_num);
+  }
+
+  if (mode == "text" && !is_text_mime(e.record.mime)) {
+    std::cerr << "popy read --mode text: unsupported binary mime '"
+              << e.record.mime << "'\n";
+    return 3;
+  }
+
+  if (mode == "raw" || mode == "text") {
+    QuarantineReadable readable(e.popy_path);
+    stream_fd_to_stdout(readable.fd());
+    return 0;
   }
 
   std::cerr << "popy read: unknown --mode '" << mode << "'\n";
@@ -287,7 +529,7 @@ int cmd_status(const Args& a) {
   auto cfg = popy::config::load_default_path();
   auto entries = popy::store::list(cfg);
   std::int64_t total = 0;
-  for (auto& e : entries) total += e.record.sizeBytes;
+  for (const auto& e : entries) total += e.record.sizeBytes;
 
   // If the daemon is up, fold its live state in.
   json daemon_obj = nullptr;

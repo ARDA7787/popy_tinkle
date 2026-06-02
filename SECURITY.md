@@ -4,9 +4,9 @@
 
 Popy handles security-sensitive operations. Please report potential vulnerabilities **privately** before disclosing them publicly.
 
-**Preferred channel:** GitHub's [private vulnerability reporting](https://github.com/ARDA7787/popy_tinkle/security/advisories/new). This is the fastest path to a fix.
+**Preferred channel:** GitHub's [private vulnerability reporting](https://github.com/ARDA7787/popy_tinkle/security/advisories/new). This is the supported private disclosure path.
 
-**Email fallback:** `security@your-domain.example` — include a description, a proof-of-concept if possible, and the version of Popy and Chromium you tested against.
+Include a description, a proof-of-concept if possible, and the version of Popy, popyd, and Chromium you tested against.
 
 ### What you can expect
 

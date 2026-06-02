@@ -23,6 +23,7 @@ struct FetchOptions {
   std::optional<std::string> expected_mime;  // verifies magic bytes if set
   std::int64_t max_bytes = 5LL * 1024 * 1024 * 1024;
   bool verbose = false;
+  bool allow_private_network = false;        // test/dev opt-in; default blocks SSRF
 };
 
 struct FetchResult {
