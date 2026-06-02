@@ -53,7 +53,7 @@ endif()
 
 # --- Vendored third-party headers -------------------------------------------
 add_library(popy_thirdparty INTERFACE)
-target_include_directories(popy_thirdparty INTERFACE
+target_include_directories(popy_thirdparty SYSTEM INTERFACE
   ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
 # stb_image_write uses the deprecated sprintf() in one HDR-export branch we
 # never call; silence the diagnostic where stb headers are compiled in.
@@ -125,18 +125,43 @@ find_path(MUPDF_INCLUDE_DIR mupdf/fitz.h
 find_library(MUPDF_LIB NAMES mupdf
   HINTS /opt/homebrew/lib /usr/local/lib /usr/lib)
 
-if(MUPDF_INCLUDE_DIR AND MUPDF_LIB)
+if(MUPDF_INCLUDE_DIR AND MUPDF_LIB AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  find_package(ZLIB REQUIRED)
+  set(POPY_MUPDF_EXTRA_LIBS)
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_library(MUPDF_THIRD_LIB NAMES mupdf-third
+      HINTS /usr/lib /usr/lib/x86_64-linux-gnu)
+    if(MUPDF_THIRD_LIB)
+      list(APPEND POPY_MUPDF_EXTRA_LIBS ${MUPDF_THIRD_LIB})
+    endif()
+    foreach(_lib freetype jpeg openjp2 png16)
+      find_library(POPY_MUPDF_${_lib}_LIB NAMES ${_lib})
+      if(POPY_MUPDF_${_lib}_LIB)
+        list(APPEND POPY_MUPDF_EXTRA_LIBS ${POPY_MUPDF_${_lib}_LIB})
+      endif()
+    endforeach()
+  endif()
   add_executable(popy-render
     src/main_popy_render.cpp
     src/render/sandbox.cpp
     src/render/pdf.cpp
-    src/render/image.cpp)
-  target_include_directories(popy-render PRIVATE ${MUPDF_INCLUDE_DIR})
-  target_link_libraries(popy-render PRIVATE popy_core ${MUPDF_LIB})
-  target_compile_options (popy-render PRIVATE ${POPY_STB_FLAGS})
+    src/render/image.cpp
+    src/render/markdown.cpp)
+  target_include_directories(popy-render SYSTEM PRIVATE ${MUPDF_INCLUDE_DIR})
+  target_link_libraries(popy-render PRIVATE
+    popy_core ${MUPDF_LIB} ${POPY_MUPDF_EXTRA_LIBS} ZLIB::ZLIB)
+  if(APPLE)
+    target_link_libraries(popy-render PRIVATE "-framework Security")
+  elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_link_libraries(popy-render PRIVATE seccomp)
+  endif()
+  target_compile_options(popy-render PRIVATE ${POPY_STB_FLAGS}
+    -Wno-old-style-cast -Wno-sign-conversion -Wno-conversion
+    -Wno-missing-field-initializers)
   target_compile_definitions(popy-render PRIVATE
     STB_IMAGE_IMPLEMENTATION
     STB_IMAGE_WRITE_IMPLEMENTATION)
+  target_compile_definitions(popy PRIVATE POPY_RENDER_AVAILABLE=1)
   set(POPY_HAS_RENDER ON)
 else()
   message(STATUS "libmupdf not found — popy-render will not be built. "
@@ -151,6 +176,20 @@ option(POPY_BUILD_TESTS "Build the test suite" ON)
 if(POPY_BUILD_TESTS)
   enable_testing()
   add_subdirectory(tests)
+endif()
+
+# --- Fuzz targets -----------------------------------------------------------
+option(POPY_FUZZ "Build libFuzzer harnesses (requires clang)" OFF)
+if(POPY_FUZZ)
+  add_executable(fuzz_sidecar tests/fuzz/fuzz_sidecar.cpp)
+  target_link_libraries(fuzz_sidecar PRIVATE popy_core)
+  target_compile_options(fuzz_sidecar PRIVATE -fsanitize=fuzzer,address,undefined)
+  target_link_options(fuzz_sidecar PRIVATE -fsanitize=fuzzer,address,undefined)
+
+  add_executable(fuzz_mime tests/fuzz/fuzz_mime.cpp)
+  target_link_libraries(fuzz_mime PRIVATE popy_core)
+  target_compile_options(fuzz_mime PRIVATE -fsanitize=fuzzer,address,undefined)
+  target_link_options(fuzz_mime PRIVATE -fsanitize=fuzzer,address,undefined)
 endif()
 
 # --- Install ----------------------------------------------------------------

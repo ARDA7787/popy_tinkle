@@ -2,40 +2,56 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
-    branches: [main]
+    branches: [main, master]
 
 jobs:
-  build-and-test:
-    runs-on: ubuntu-latest
-
+  popyd-linux:
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-
       - name: Install dependencies
-        run: npm ci
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build clang libcurl4-openssl-dev libmupdf-dev libseccomp-dev cppcheck
+      - name: Configure
+        run: cmake -S popyd -B popyd/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -G Ninja
+      - name: Build
+        run: cmake --build popyd/build -j$(nproc)
+      - name: Test
+        run: ctest --test-dir popyd/build --output-on-failure -j$(nproc)
+      - name: Configure sanitizers
+        run: cmake -S popyd -B popyd/build-asan -DCMAKE_BUILD_TYPE=Debug -DPOPY_SANITIZERS=ON -DCMAKE_CXX_COMPILER=clang++ -G Ninja
+      - name: Build sanitizers
+        run: cmake --build popyd/build-asan -j$(nproc)
+      - name: Test sanitizers
+        run: ctest --test-dir popyd/build-asan --output-on-failure -j$(nproc)
+      - name: cppcheck
+        run: cppcheck --enable=warning,performance,portability --error-exitcode=1 --suppress=missingIncludeSystem --suppress=passedByValue popyd/src/
 
-      - name: Typecheck
-        run: npm run typecheck
+  popyd-macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: brew install cmake ninja mupdf cppcheck
+      - name: Configure
+        run: cmake -S popyd -B popyd/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -G Ninja
+      - name: Build
+        run: cmake --build popyd/build -j$(sysctl -n hw.ncpu)
+      - name: Test
+        run: ctest --test-dir popyd/build --output-on-failure -j$(sysctl -n hw.ncpu)
 
-      - name: Unit tests
-        run: npm run test:unit
-
-      - name: Build extension
-        run: npm run build
-
-      - name: Upload dist
-        if: success()
-        uses: actions/upload-artifact@v4
+  browser-extension:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          name: popy-dist
-          path: dist/
-          if-no-files-found: error
-          retention-days: 14
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test:unit
+      - run: npm run build
