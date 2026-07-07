@@ -539,13 +539,33 @@ int cmd_status(const Args& a) {
     catch (...) { /* malformed; ignore */ }
   }
 
+  // Overall enforcement posture. `popy fetch` (Mode A) is always a guaranteed
+  // per-invocation path regardless of the daemon; the daemon (Mode B) widens
+  // coverage to arbitrary writes into the watch dirs, but only best-effort
+  // (there is a create-to-rename race window). Report both so agents/users
+  // can tell which guarantee applies to *this* environment right now.
+  const bool daemon_running = !daemon_obj.is_null();
+  const std::string enforcement_mode = daemon_running ? "strict" : "popy_only";
+  const std::string guarantee_level =
+      daemon_running ? "best_effort" : "guaranteed";
+  json bypass_surface = json::array();
+  bypass_surface.push_back(
+      "native downloads/writes outside popy fetch are unenforced when the "
+      "daemon is off");
+  bypass_surface.push_back(
+      "new files outside configured watchDirs are not quarantined by the "
+      "watcher");
+
   json j = {
-      {"daemonRunning", !daemon_obj.is_null()},
-      {"daemon",        daemon_obj},
-      {"stageDir",      cfg.stage_dir.string()},
-      {"watchDirs",     [&] { json arr; for (auto& w : cfg.watch_dirs) arr.push_back(w.string()); return arr; }()},
-      {"fileCount",     entries.size()},
-      {"totalBytes",    total},
+      {"daemonRunning",    daemon_running},
+      {"daemon",           daemon_obj},
+      {"stageDir",         cfg.stage_dir.string()},
+      {"watchDirs",        [&] { json arr; for (auto& w : cfg.watch_dirs) arr.push_back(w.string()); return arr; }()},
+      {"fileCount",        entries.size()},
+      {"totalBytes",       total},
+      {"enforcementMode",  enforcement_mode},
+      {"guaranteeLevel",   guarantee_level},
+      {"bypassSurface",    bypass_surface},
   };
   if (has_flag(a, "json")) {
     std::cout << j.dump(2) << "\n";
@@ -559,6 +579,8 @@ int cmd_status(const Args& a) {
                 << " paused=" << (daemon_obj["paused"].get<bool>() ? "yes" : "no")
                 << "\n";
     }
+    std::cout << "enforcement_mode=" << enforcement_mode
+              << "  guarantee_level=" << guarantee_level << "\n";
   }
   return (daemon_obj.is_null() && has_flag(a, "require-daemon")) ? 1 : 0;
 }
