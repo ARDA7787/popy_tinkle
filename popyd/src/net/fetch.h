@@ -24,6 +24,12 @@ struct FetchOptions {
   std::int64_t max_bytes = 5LL * 1024 * 1024 * 1024;
   bool verbose = false;
   bool allow_private_network = false;        // test/dev opt-in; default blocks SSRF
+  // Sidecar-signing key location; empty → paths::key_file(). Tests point this
+  // at a temp dir so they never touch $HOME.
+  std::filesystem::path key_file;
+  // Test hook: force the portable `.part` writer branch even where O_TMPFILE
+  // is available (Linux), so both branches get CI coverage.
+  bool force_part_fallback = false;
 };
 
 struct FetchResult {

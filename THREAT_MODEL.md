@@ -67,6 +67,23 @@ Read this list carefully. These are real, important threats that Popy is the wro
 
 7. **Quota exhaustion attacks.** A malicious site could try to fill Popy's OPFS quota by triggering many downloads. The classifier's large-file threshold and the `unlimitedStorage` permission mitigate this; the dashboard's sort-by-size makes cleanup easy. But this is not zero risk.
 
+## The popyd zero-trust download engine
+
+`popyd`/`popy` extend the same quarantine model to files fetched outside the browser (AI agents, CLIs). The daemon-side guarantees, stated precisely:
+
+- **Mode 0000 from the first byte.** `popy fetch` never exposes readable in-flight bytes. On Linux the download is written to an anonymous `O_TMPFILE` file — it has _no name at all_ until it is complete; on macOS (and as a fallback) it is a `<name>_popy.part` file created with mode `0000` and written through the held file descriptor (POSIX checks permissions at `open()` time, so the writer keeps access while nothing else can gain it). The invisibility window per platform: Linux `O_TMPFILE` — the file is unnamed and mode 0000 for the whole transfer; fallback — the file is named `.part` but mode 0000 for the whole transfer.
+- **Commit ordering.** Data is fsync'd, then the HMAC-signed sidecar is written, then the data is linked/renamed to its final `_popy` name. A crash leaves either nothing, a mode-0000 `.part`, or a sidecar without data (garbage-collected by the startup repair pass) — never a named, readable, unverifiable `_popy` file.
+- **Signed sidecars.** Every sidecar carries an HMAC-SHA256 over a canonical, length-prefixed payload that includes the actual on-disk filename (killing sidecar-transplant attacks), keyed by a per-user 32-byte key at `~/.config/popy/popy.key` (mode 0600). A bad signature is tamper evidence and is never overridable; unsigned pre-upgrade sidecars are refused until an explicit one-time `popy resign`.
+- **Verified exits.** Every path out of quarantine (`popy read`, `popy release`, the MCP tools) verifies the sidecar signature, the recorded size, and the full content SHA-256 before any byte leaves. `popy release` stages into a same-directory temp file, re-hashes the copied bytes, and commits with `linkat`/`rename` — a symlink planted at the destination is never followed.
+- **Sanitized text reads.** `popy read --mode text` (and the MCP `popy_read_text` tool) strips C0/C1 control characters (except newline/tab) and replaces invalid UTF-8 with U+FFFD at the codepoint level, and refuses content whose head contains a NUL. Raw bytes remain available only via the explicit `--mode raw` debug path (still hash-verified).
+
+**Honest trust boundary — read this before relying on any of the above.** File modes and a same-user HMAC key defend against confused-deputy AI agents, hostile content influencing tool arguments, and accidental opens by other programs. They **cannot** defend against root or the file owner acting deliberately — no user-space download engine can. If a process running as your user decides to `chmod` the file and read it, or to read the signing key and forge sidecars, nothing in popyd stops it. The guarantees above are about removing _accidental and induced_ paths to hostile bytes, not about defeating a determined local attacker with your privileges.
+
+**Residual races (by design, documented rather than hidden):**
+
+- Reading a quarantined file requires a `chmod(path, 0400)` → `open()` → `fchmod(fd, 0000)` sequence; another same-user process could open the file inside that gap. The window is microseconds and only exists during an explicit, verified read.
+- A writer that already held an open fd on a file _before_ the watcher quarantined it can keep appending after the watcher hashed it. This is caught later — release-time and read-time hash verification refuse the modified content.
+
 ## Trust boundaries
 
 - Between the **network** and **OPFS**: Popy's offscreen document. Runs our own code; we control the fetch and the validation.

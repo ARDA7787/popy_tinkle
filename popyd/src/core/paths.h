@@ -13,6 +13,12 @@ const std::filesystem::path& home();
 // ~/.config/popy/config.toml (honours $XDG_CONFIG_HOME).
 std::filesystem::path config_file();
 
+// ~/.config/popy/popy.key (honours $XDG_CONFIG_HOME) — the 32-byte HMAC key
+// that signs sidecars. Lives in the config dir, NOT $XDG_RUNTIME_DIR: the
+// runtime dir is tmpfs on most Linux systems and a reboot would invalidate
+// every existing signature.
+std::filesystem::path key_file();
+
 // ~/.popy-stage — default stage_dir / first watch_dir, indexer-excluded.
 std::filesystem::path default_stage_dir();
 

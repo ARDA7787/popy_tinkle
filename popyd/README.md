@@ -1,8 +1,9 @@
 # popyd
 
-Documentation for `popyd` (the daemon) and `popy` (the CLI) now lives in the
-project's single [README](../README.md#cli-daemon--popyd), under
-**"CLI Daemon — popyd"**, alongside the browser extension docs.
+Documentation for `popyd` (the daemon) and `popy` (the CLI) lives in the
+project's single [README](../README.md#part-2--cli-daemon-popyd), under
+**"Part 2 — CLI Daemon (popyd)"**, alongside the browser extension docs —
+the two are one project, documented together.
 
 Quick links:
 

@@ -38,6 +38,10 @@ fs::path config_file() {
   return env_or("XDG_CONFIG_HOME", home() / ".config") / "popy" / "config.toml";
 }
 
+fs::path key_file() {
+  return env_or("XDG_CONFIG_HOME", home() / ".config") / "popy" / "popy.key";
+}
+
 fs::path default_stage_dir() { return home() / ".popy-stage"; }
 
 fs::path runtime_dir() {

@@ -4,6 +4,7 @@
 // in their own translation units. The wrapper is thin enough that compilers
 // inline through it, and it keeps picosha2 confined to one .cpp.
 #pragma once
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -23,6 +24,8 @@ class Sha256Streaming {
   // Returns lowercase hex (64 chars). May only be called once; further updates
   // after digest() are undefined.
   std::string digest_hex();
+  // Raw 32-byte digest. Same single-call contract as digest_hex().
+  std::array<unsigned char, 32> digest_bytes();
 
  private:
   struct Impl;

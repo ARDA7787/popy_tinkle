@@ -41,7 +41,7 @@ npm run build
 
 ## Code layout
 
-See the [Project layout](README.md#project-layout) section of the README.
+See the [Extension layout](README.md#extension-layout) section of the README.
 
 Three rules:
 

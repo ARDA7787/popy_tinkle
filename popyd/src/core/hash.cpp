@@ -24,6 +24,13 @@ std::string Sha256Streaming::digest_hex() {
   return out;
 }
 
+std::array<unsigned char, 32> Sha256Streaming::digest_bytes() {
+  p_->h.finish();
+  std::array<unsigned char, 32> out{};
+  p_->h.get_hash_bytes(out.begin(), out.end());
+  return out;
+}
+
 std::string sha256_hex(std::string_view data) {
   Sha256Streaming s;
   s.update(data.data(), data.size());

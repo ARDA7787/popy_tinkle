@@ -63,7 +63,12 @@ set(POPY_STB_FLAGS -Wno-deprecated-declarations)
 add_library(popy_core STATIC
   src/core/paths.cpp
   src/core/naming.cpp
+  src/core/rand.cpp
   src/core/uuid.cpp
+  src/core/hmac.cpp
+  src/core/keyring.cpp
+  src/core/attest.cpp
+  src/core/textsafe.cpp
   src/core/log.cpp
   src/core/hash.cpp
   src/core/mime.cpp
@@ -71,6 +76,7 @@ add_library(popy_core STATIC
   src/core/config.cpp
   src/core/safe_fs.cpp
   src/store/quarantine.cpp
+  src/store/quarantine_file.cpp
   src/net/fetch.cpp
   src/ipc/status.cpp)
 
@@ -190,6 +196,11 @@ if(POPY_FUZZ)
   target_link_libraries(fuzz_mime PRIVATE popy_core)
   target_compile_options(fuzz_mime PRIVATE -fsanitize=fuzzer,address,undefined)
   target_link_options(fuzz_mime PRIVATE -fsanitize=fuzzer,address,undefined)
+
+  add_executable(fuzz_attest tests/fuzz/fuzz_attest.cpp)
+  target_link_libraries(fuzz_attest PRIVATE popy_core)
+  target_compile_options(fuzz_attest PRIVATE -fsanitize=fuzzer,address,undefined)
+  target_link_options(fuzz_attest PRIVATE -fsanitize=fuzzer,address,undefined)
 endif()
 
 # --- Install ----------------------------------------------------------------

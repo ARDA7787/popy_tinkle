@@ -90,6 +90,8 @@ Record read(const fs::path& sidecar_path) {
   r.schemaVersion    = optional_or<int>(j, "schemaVersion", kSchemaVersion);
   r.agent            = optional_or<std::string>(j, "agent",  "popyd/0.1");
   r.origin           = optional_or<std::string>(j, "origin", "fetch");
+  r.sig              = opt_str(j, "sig");
+  r.sigAlg           = opt_str(j, "sigAlg");
   return r;
 }
 
@@ -114,6 +116,8 @@ void write_atomic(const fs::path& sidecar_path, const Record& r) {
       {"note",             r.note     ? json(*r.note)     : json(nullptr)},
       {"agent",            r.agent},
       {"origin",           r.origin},
+      {"sig",              r.sig    ? json(*r.sig)    : json(nullptr)},
+      {"sigAlg",           r.sigAlg ? json(*r.sigAlg) : json(nullptr)},
   };
   const auto serialized = j.dump(2);
 

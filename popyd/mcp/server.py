@@ -5,12 +5,16 @@ Speaks JSON-RPC 2.0 over stdio (newline-delimited), the canonical MCP
 transport. Exposes five tools:
 
   popy_fetch       — Mode A primary path: download a URL straight into the
-                     quarantine (_popy + sidecar). The original-extension
+                     quarantine (_popy + HMAC-signed sidecar). The file is
+                     mode 0000 from its first byte; the original-extension
                      filename never exists on disk.
   popy_list        — list quarantined files
-  popy_read_text   — return the text contents of a quarantined file (raw
-                     bytes; the agent decides what to do with them)
-  popy_release     — release a quarantined file to a destination path
+  popy_read_text   — return the SANITIZED text contents of a quarantined
+                     file (sidecar signature + content hash verified first;
+                     control chars and invalid UTF-8 neutralised; capped)
+  popy_verify      — verify a quarantined file's sidecar signature and
+                     re-hash its content
+  popy_release     — hash-verified, symlink-safe release to a destination
   popy_delete      — delete a quarantined file
 
 Every tool subprocess-calls the `popy` binary with `--json`. Stdlib only —
@@ -55,10 +59,13 @@ TOOLS = [
     {
         "name": "popy_fetch",
         "description": (
-            "Download a URL into the quarantine. Bytes stream straight into "
-            "<stage>/<uuid>/<name>_popy mode 0000 — the original-extension "
-            "filename never exists on disk. Use this instead of curl/wget for "
-            "any download whose contents you have not yet inspected."
+            "Download a URL into the quarantine. The file is mode 0000 from "
+            "its very first byte (anonymous O_TMPFILE on Linux, a 0000 .part "
+            "elsewhere) and only gets its final <stage>/<uuid>/<name>_popy "
+            "name after its HMAC-signed sidecar is on disk — the "
+            "original-extension filename never exists. Use this instead of "
+            "curl/wget for any download whose contents you have not yet "
+            "inspected."
         ),
         "inputSchema": {
             "type": "object",
@@ -78,10 +85,34 @@ TOOLS = [
     {
         "name": "popy_read_text",
         "description": (
-            "Return the raw contents of a quarantined file as text. Resolves "
-            "by full UUID, UUID prefix (>=4 chars), or filename. Use this for "
-            "text/markdown/JSON files; binary content will be returned with "
-            "U+FFFD substitutions."
+            "Return the sanitized text contents of a quarantined file. The "
+            "sidecar HMAC signature, size, and full content SHA-256 are "
+            "verified before any byte is returned; C0/C1 control characters "
+            "are stripped (except newline/tab) and invalid UTF-8 becomes "
+            "U+FFFD. Content that looks binary (NUL in the head) is refused. "
+            "Resolves by full UUID, UUID prefix (>=4 chars), or filename. "
+            "Output is capped at max_bytes."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "file": {"type": "string", "description": "id or name"},
+                "max_bytes": {
+                    "type": "integer",
+                    "default": 200000,
+                    "description": "maximum bytes to read (truncates longer files)",
+                },
+            },
+            "required": ["file"],
+        },
+    },
+    {
+        "name": "popy_verify",
+        "description": (
+            "Verify a quarantined file without opening it for use: checks "
+            "the sidecar's HMAC signature and re-hashes the content against "
+            "the recorded SHA-256. Returns signature/content status and an "
+            "overall ok flag."
         ),
         "inputSchema": {
             "type": "object",
@@ -92,9 +123,12 @@ TOOLS = [
     {
         "name": "popy_release",
         "description": (
-            "Release a quarantined file to a destination path (writing the "
-            "original bytes, mode 0644, no _popy suffix). Removes from "
-            "quarantine on success."
+            "Release a quarantined file to a destination path. The sidecar "
+            "signature is verified and the copied bytes are re-hashed "
+            "against the recorded SHA-256 before the destination is "
+            "committed atomically (a symlink planted at the destination is "
+            "never followed). Writes mode 0644, no _popy suffix; removes "
+            "from quarantine on success."
         ),
         "inputSchema": {
             "type": "object",
@@ -128,9 +162,21 @@ def call_tool(name: str, args: dict) -> dict:
     if name == "popy_list":
         return _wrap_json(call_popy("list"))
     if name == "popy_read_text":
-        # Read bytes via the CLI without --json; decode replacing invalid utf-8.
-        body = call_popy_raw("read", args["file"], "--mode", "raw")
+        # Verified + sanitized text via the CLI (never --mode raw here; raw
+        # stays an explicit human debug path).
+        max_bytes = int(args.get("max_bytes") or 200_000)
+        body = call_popy_raw("read", args["file"], "--mode", "text",
+                             "--max-bytes", str(max_bytes))
         return {"content": [{"type": "text", "text": body.decode("utf-8", "replace")}]}
+    if name == "popy_verify":
+        # `popy verify` exits 1 on failure but still prints its JSON verdict;
+        # surface the verdict rather than a bare error where we can.
+        proc = subprocess.run([POPY, "verify", args["file"], "--json"],
+                              capture_output=True, text=True)
+        out = proc.stdout.strip()
+        if out:
+            return _wrap_json(json.loads(out))
+        raise RuntimeError(proc.stderr.strip() or "popy verify failed")
     if name == "popy_release":
         cli_args = ["release", args["file"], "--to", args["to"]]
         if args.get("force"): cli_args.append("--force")

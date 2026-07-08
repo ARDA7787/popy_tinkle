@@ -45,6 +45,10 @@ struct Record {
   int schemaVersion{kSchemaVersion};
   std::string agent{"popyd/0.1"};
   std::string origin{"fetch"};      // "fetch" | "watcher"
+
+  // Attestation (additive, optional for pre-upgrade sidecars — see attest.h).
+  std::optional<std::string> sig;     // 64 hex chars, HMAC-SHA256
+  std::optional<std::string> sigAlg;  // "hmac-sha256-v1"
 };
 
 // Read `<file>_popy.meta.json` next to a `_popy` file.

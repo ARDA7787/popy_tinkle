@@ -23,6 +23,7 @@ Include a description, a proof-of-concept if possible, and the version of Popy, 
 **In scope:**
 
 - Bypasses of the quarantine model (any path by which a downloaded file reaches a location where the OS can interact with it, other than the documented `showSaveFilePicker()` flow).
+- popyd/popy pipeline breaks: any window where in-flight `popy fetch` bytes are readable by another process, a way to make `popy read`/`popy release` accept content whose sidecar signature or SHA-256 does not verify, a sidecar-forgery or sidecar-transplant path that does not require reading the user's `popy.key`, or a `popy release` that follows a symlink planted at the destination.
 - Extension-context escalation (an attacker with only a website's privileges gaining Popy's privileges).
 - Data-exfiltration paths (any way Popy could send file bytes or metadata outside your browser).
 - Denial-of-service against the extension that leaves downloads unprotected without your knowledge.

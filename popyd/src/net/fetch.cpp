@@ -11,6 +11,7 @@
 #include <array>
 #include <cerrno>
 #include <cstring>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -18,13 +19,17 @@
 
 #include <curl/curl.h>
 
+#include "core/attest.h"
 #include "core/hash.h"
+#include "core/keyring.h"
 #include "core/log.h"
 #include "core/mime.h"
 #include "core/naming.h"
+#include "core/paths.h"
 #include "core/safe_fs.h"
 #include "core/sidecar.h"
 #include "core/uuid.h"
+#include "store/quarantine_file.h"
 
 namespace fs = std::filesystem;
 
@@ -192,14 +197,17 @@ int prereq_cb(void* clientp, char* conn_primary_ip, char* conn_local_ip,
   return CURL_PREREQFUNC_OK;
 }
 
-[[noreturn]] void cleanup_and_throw(const fs::path& popy_path,
+// Abort the in-flight writer (drops any .part; the O_TMPFILE branch never
+// had a name to drop), remove a sidecar if one was written, and remove the
+// now-empty per-id dir.
+[[noreturn]] void cleanup_and_throw(popy::store::QuarantineWriter& writer,
                                     const fs::path& sidecar_path,
+                                    const fs::path& target_dir,
                                     const std::string& msg) {
+  writer.abort();
   std::error_code ec;
-  fs::remove(popy_path, ec);
   fs::remove(sidecar_path, ec);
-  // also try to remove the now-empty <uuid> dir
-  fs::remove(popy_path.parent_path(), ec);
+  fs::remove(target_dir, ec);
   throw std::runtime_error("popy fetch: " + msg);
 }
 
@@ -235,22 +243,29 @@ FetchResult fetch(const FetchOptions& opts) {
   // 0700 on the per-id dir so peer users can't read in-flight bytes.
   ::chmod(target_dir.c_str(), 0700);
 
-  int fd = ::open(popy_path.c_str(),
-                  O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
-  if (fd < 0) {
-    throw std::runtime_error("popy fetch: cannot create " + popy_path.string() +
-                             ": " + std::strerror(errno));
+  // Mode 0000 from the first byte: anonymous O_TMPFILE on Linux, a .part
+  // file born 0000 elsewhere. The bytes are never openable by path while
+  // untrusted content flows.
+  std::unique_ptr<popy::store::QuarantineWriter> writer_holder;
+  try {
+    writer_holder = std::make_unique<popy::store::QuarantineWriter>(
+        popy_path, opts.force_part_fallback);
+  } catch (const std::exception& e) {
+    std::error_code ec2;
+    fs::remove(target_dir, ec2);
+    throw std::runtime_error("popy fetch: " + std::string(e.what()));
   }
+  popy::store::QuarantineWriter& writer = *writer_holder;
 
   Sink sink;
-  sink.fd = fd;
+  sink.fd = writer.fd();
   sink.max_bytes = opts.max_bytes;
   if (opts.expected_mime) sink.expected_mime = *opts.expected_mime;
 
   CURL* curl = curl_easy_init();
   if (!curl) {
-    ::close(fd);
-    cleanup_and_throw(popy_path, sidecar_path, "curl_easy_init failed");
+    cleanup_and_throw(writer, sidecar_path, target_dir,
+                      "curl_easy_init failed");
   }
 
   curl_easy_setopt(curl, CURLOPT_URL, opts.url.c_str());
@@ -294,8 +309,7 @@ FetchResult fetch(const FetchOptions& opts) {
 
   if (rc != CURLE_OK) {
     std::string what = sink.error.empty() ? curl_easy_strerror(rc) : sink.error;
-    ::close(fd);
-    cleanup_and_throw(popy_path, sidecar_path,
+    cleanup_and_throw(writer, sidecar_path, target_dir,
                       "transport error: " + what +
                           (http_code ? " (HTTP " + std::to_string(http_code) + ")"
                                      : ""));
@@ -305,8 +319,7 @@ FetchResult fetch(const FetchOptions& opts) {
   if (!opts.allow_private_network &&
       !effective_host.empty() && effective_host != initial_host &&
       host_resolves_private(effective_host)) {
-    ::close(fd);
-    cleanup_and_throw(popy_path, sidecar_path,
+    cleanup_and_throw(writer, sidecar_path, target_dir,
                       "SSRF: redirect to private IP blocked");
   }
 
@@ -315,24 +328,17 @@ FetchResult fetch(const FetchOptions& opts) {
     auto head = std::string_view(
         reinterpret_cast<const char*>(sink.probe.data()), sink.probe_len);
     if (!popy::mime::magic_consistent(head, sink.expected_mime)) {
-      ::close(fd);
-      cleanup_and_throw(popy_path, sidecar_path,
+      cleanup_and_throw(writer, sidecar_path, target_dir,
                         "magic-byte mismatch (short body) for expected mime '" +
                             sink.expected_mime + "'");
     }
   }
 
-  if (::fsync(fd) != 0) {
-    ::close(fd);
-    cleanup_and_throw(popy_path, sidecar_path,
-                      std::string("fsync failed: ") + std::strerror(errno));
+  try {
+    writer.sync();
+  } catch (const std::exception& e) {
+    cleanup_and_throw(writer, sidecar_path, target_dir, e.what());
   }
-  // chmod 0000 — even if a path traversal exists later, the file can't be
-  // opened until popy release restores 0644.
-  if (::fchmod(fd, 0000) != 0) {
-    popy::log::warn(std::string("fchmod 0000 failed: ") + std::strerror(errno));
-  }
-  ::close(fd);
 
   // Build sidecar.
   popy::sidecar::Record r;
@@ -354,11 +360,25 @@ FetchResult fetch(const FetchOptions& opts) {
   r.agent     = "popyd/0.1";
   r.origin    = "fetch";
 
+  // Ordering invariant: data fsync'd → sidecar signed+written → data linked
+  // to its final name. The final _popy name never exists without a verified
+  // sidecar next to it.
   try {
+    auto key = popy::keyring::load_or_create(
+        opts.key_file.empty() ? popy::paths::key_file() : opts.key_file);
+    popy::attest::sign(r, popy_basename, key);
     popy::sidecar::write_atomic(sidecar_path, r);
   } catch (const std::exception& e) {
-    cleanup_and_throw(popy_path, sidecar_path,
+    cleanup_and_throw(writer, sidecar_path, target_dir,
                       std::string("sidecar write failed: ") + e.what());
+  }
+
+  try {
+    writer.commit();
+  } catch (const std::exception& e) {
+    // Commit failure must not leave a sidecar pointing at nothing.
+    cleanup_and_throw(writer, sidecar_path, target_dir,
+                      std::string("commit failed: ") + e.what());
   }
 
   popy::log::info("fetched " + opts.url + " -> " + popy_path.string());

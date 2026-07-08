@@ -230,6 +230,19 @@ int daemon_main() {
     }
   });
 
+  // Repair pass: adopt orphaned _popy files (hash+sign+sidecar, mode 0000),
+  // GC sidecars whose data file is gone. Runs before the watcher so the
+  // catch-up scan sees a consistent store.
+  try {
+    auto stats = popy::store::repair(cfg);
+    if (stats.adopted > 0 || stats.gc_sidecars > 0) {
+      popy::log::info("repair: adopted=" + std::to_string(stats.adopted) +
+                      " gc_sidecars=" + std::to_string(stats.gc_sidecars));
+    }
+  } catch (const std::exception& e) {
+    popy::log::warn(std::string("repair pass failed: ") + e.what());
+  }
+
   std::unique_ptr<popy::watch::Watcher> watcher;
   if (cfg.enabled) {
     watcher = std::make_unique<popy::watch::Watcher>(cfg.watch_dirs);

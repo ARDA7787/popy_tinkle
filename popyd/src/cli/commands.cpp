@@ -27,10 +27,14 @@
 #include <mach-o/dyld.h>
 #endif
 
+#include "core/attest.h"
 #include "core/config.h"
+#include "core/hash.h"
+#include "core/keyring.h"
 #include "core/log.h"
 #include "core/paths.h"
 #include "core/sidecar.h"
+#include "core/textsafe.h"
 #include "ipc/status.h"
 #include "net/fetch.h"
 #include "nlohmann_json.hpp"
@@ -112,9 +116,11 @@ R"(popy — quarantine CLI
 Usage:
   popy fetch <url> [--out <name>] [--mime <type>] [--max-bytes N] [--json]
   popy list  [--json]
-  popy read  <file> [--mode raw|text|png] [--page N]
+  popy read  <file> [--mode raw|text|png] [--page N] [--max-bytes N]
   popy release <file> --to <path> [--force]
   popy delete <file>
+  popy verify <file> [--json]
+  popy resign [--json]
   popy status [--json]
   popy pause | popy resume
   popy config [--print] [--path]
@@ -195,57 +201,11 @@ void stream_fd_to_stdout(int fd) {
   }
 }
 
-class QuarantineReadable {
- public:
-  explicit QuarantineReadable(const fs::path& path) : path_(path) {
-    // Opening an already-closed 0000 quarantine file is the only unavoidable
-    // path step here; after this point permission changes are fd-scoped.
-    if (::chmod(path_.c_str(), 0400) != 0) {
-      throw std::runtime_error("popy read: chmod 0400 failed: " +
-                               std::string(std::strerror(errno)));
-    }
-    fd_ = ::open(path_.c_str(), O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
-    if (fd_ < 0) {
-      int e = errno;
-      ::chmod(path_.c_str(), 0000);
-      throw std::runtime_error("popy read: open failed: " +
-                               std::string(std::strerror(e)));
-    }
-    if (::fchmod(fd_, 0400) != 0) {
-      close_restore();
-      throw std::runtime_error("popy read: fchmod 0400 failed: " +
-                               std::string(std::strerror(errno)));
-    }
-  }
-
-  QuarantineReadable(const QuarantineReadable&) = delete;
-  QuarantineReadable& operator=(const QuarantineReadable&) = delete;
-
-  ~QuarantineReadable() { close_restore(); }
-
-  int fd() const { return fd_; }
-
- private:
-  void close_restore() {
-    if (fd_ >= 0) {
-      if (::fchmod(fd_, 0000) != 0) {
-        popy::log::warn(std::string("popy read: fchmod 0000 failed: ") +
-                        std::strerror(errno));
-      }
-      ::close(fd_);
-      fd_ = -1;
-    } else if (!path_.empty()) {
-      ::chmod(path_.c_str(), 0000);
-    }
-  }
-
-  fs::path path_;
-  int fd_ = -1;
-};
-
 int render_via_child(const popy::store::Entry& e, const std::string& mode,
-                     int page_num) {
-  QuarantineReadable readable(e.popy_path);
+                     int page_num, const std::string& key) {
+  // Verified gate: sidecar HMAC + size + full content hash, then a minimal-
+  // window fd (on-disk mode stays 0000 while the renderer works).
+  auto readable = popy::store::open_verified(e, key);
 
   int child_stdin[2] = {-1, -1};
   int child_stdout[2] = {-1, -1};
@@ -411,16 +371,20 @@ int cmd_list(const Args& a) {
   auto entries = popy::store::list(cfg);
   if (has_flag(a, "json")) {
     json arr = json::array();
-    for (const auto& e : entries) arr.push_back(record_to_json(e.record));
+    for (const auto& e : entries) {
+      auto j = record_to_json(e.record);
+      j["dataMissing"] = e.data_missing;
+      arr.push_back(std::move(j));
+    }
     std::cout << arr.dump(2) << "\n";
   } else {
     if (entries.empty()) { std::cout << "(no quarantined files)\n"; return 0; }
-    std::printf("%-36s  %-10s  %-20s  %s\n",
+    std::printf("%-36s  %-12s  %-20s  %s\n",
                 "ID", "STATUS", "SIZE", "ORIGINAL");
     for (auto& e : entries) {
-      std::printf("%-36s  %-10s  %-20lld  %s\n",
+      std::printf("%-36s  %-12s  %-20lld  %s\n",
                   e.record.id.c_str(),
-                  e.record.status.c_str(),
+                  e.data_missing ? "data-missing" : e.record.status.c_str(),
                   static_cast<long long>(e.record.sizeBytes),
                   e.record.originalFilename.c_str());
     }
@@ -473,6 +437,7 @@ int cmd_read(const Args& a) {
   if (auto page = opt_str(a, "page")) {
     page_num = std::stoi(*page);
   }
+  auto key = popy::keyring::load_or_create(popy::paths::key_file());
 
   if (mode == "png") {
     if (!renderable_mime(e.record.mime)) {
@@ -480,11 +445,11 @@ int cmd_read(const Args& a) {
                 << "'\n";
       return 3;
     }
-    return render_via_child(e, mode, page_num);
+    return render_via_child(e, mode, page_num, key);
   }
 
   if (mode == "text" && e.record.mime == "application/pdf") {
-    return render_via_child(e, mode, page_num);
+    return render_via_child(e, mode, page_num, key);
   }
 
   if (mode == "text" && !is_text_mime(e.record.mime)) {
@@ -493,14 +458,171 @@ int cmd_read(const Args& a) {
     return 3;
   }
 
-  if (mode == "raw" || mode == "text") {
-    QuarantineReadable readable(e.popy_path);
+  if (mode == "raw") {
+    // Raw stays available as an explicit debug path — verified (sidecar HMAC
+    // + size + content hash) but NOT sanitized.
+    auto readable = popy::store::open_verified(e, key);
     stream_fd_to_stdout(readable.fd());
+    return 0;
+  }
+
+  if (mode == "text") {
+    std::int64_t cap = cfg.preview_max_bytes;
+    if (auto m = opt_str(a, "max-bytes")) {
+      cap = std::min(cap, static_cast<std::int64_t>(std::stoll(*m)));
+    }
+    if (cap < 0) cap = 0;
+
+    auto readable = popy::store::open_verified(e, key);
+    std::string body;
+    body.reserve(static_cast<size_t>(
+        std::min<std::int64_t>(cap, e.record.sizeBytes)));
+    char buf[64 * 1024];
+    while (static_cast<std::int64_t>(body.size()) < cap) {
+      auto want = std::min<std::int64_t>(
+          static_cast<std::int64_t>(sizeof(buf)),
+          cap - static_cast<std::int64_t>(body.size()));
+      ssize_t n = ::read(readable.fd(), buf, static_cast<size_t>(want));
+      if (n == 0) break;
+      if (n < 0) {
+        if (errno == EINTR) continue;
+        throw std::runtime_error(std::string("popy read: read failed: ") +
+                                 std::strerror(errno));
+      }
+      body.append(buf, static_cast<size_t>(n));
+    }
+
+    // Defence against a lying mime: a NUL in the head means binary content.
+    if (popy::textsafe::looks_binary(
+            std::string_view(body).substr(0, 4096))) {
+      std::cerr << "popy read --mode text: content looks binary "
+                   "(NUL in probe); use --mode raw if you really mean it\n";
+      return 3;
+    }
+
+    auto safe = popy::textsafe::sanitize_utf8(body);
+    write_all_fd(STDOUT_FILENO, safe.data(), safe.size());
     return 0;
   }
 
   std::cerr << "popy read: unknown --mode '" << mode << "'\n";
   return 2;
+}
+
+// `popy verify <file>` — verify the sidecar HMAC and re-hash the content.
+// Exit 0 only when both check out; unsigned sidecars exit 1 with a resign
+// hint; a bad signature or hash mismatch is reported as tampering.
+int cmd_verify(const Args& a) {
+  if (a.positional.empty()) {
+    std::cerr << "popy verify: missing <file>\n"; return 2;
+  }
+  auto cfg = popy::config::load_default_path();
+  auto e = popy::store::resolve(cfg, a.positional[0]);
+  auto key = popy::keyring::load_or_create(popy::paths::key_file());
+
+  std::string popy_name = e.popy_path.filename().string();
+  auto sig = popy::attest::verify(e.record, popy_name, key);
+  std::string sig_status;
+  switch (sig) {
+    case popy::attest::VerifyResult::ok:                sig_status = "ok"; break;
+    case popy::attest::VerifyResult::missing_signature: sig_status = "unsigned"; break;
+    case popy::attest::VerifyResult::unknown_alg:       sig_status = "unknown-alg"; break;
+    case popy::attest::VerifyResult::bad_signature:     sig_status = "bad-signature"; break;
+  }
+
+  bool data_ok = false;
+  std::string data_status;
+  struct stat st {};
+  if (::lstat(e.popy_path.c_str(), &st) != 0) {
+    data_status = "missing";
+  } else if (!S_ISREG(st.st_mode)) {
+    data_status = "not-a-regular-file";
+  } else if (st.st_size != e.record.sizeBytes) {
+    data_status = "size-mismatch";
+  } else {
+    popy::store::QuarantineReadable readable(e.popy_path);
+    popy::hash::Sha256Streaming hasher;
+    char buf[64 * 1024];
+    while (true) {
+      ssize_t n = ::read(readable.fd(), buf, sizeof(buf));
+      if (n == 0) break;
+      if (n < 0) {
+        if (errno == EINTR) continue;
+        throw std::runtime_error(std::string("popy verify: read failed: ") +
+                                 std::strerror(errno));
+      }
+      hasher.update(buf, static_cast<size_t>(n));
+    }
+    if (hasher.digest_hex() == e.record.sha256) {
+      data_ok = true;
+      data_status = "ok";
+    } else {
+      data_status = "sha256-mismatch";
+    }
+  }
+
+  bool ok = (sig == popy::attest::VerifyResult::ok) && data_ok;
+  if (has_flag(a, "json")) {
+    std::cout << json{{"id", e.record.id},
+                      {"file", popy_name},
+                      {"signature", sig_status},
+                      {"content", data_status},
+                      {"ok", ok}}.dump(2) << "\n";
+  } else {
+    std::cout << "id=" << e.record.id << "\n";
+    std::cout << "signature=" << sig_status << "\n";
+    std::cout << "content=" << data_status << "\n";
+    std::cout << (ok ? "OK" : "FAILED") << "\n";
+    if (sig == popy::attest::VerifyResult::missing_signature) {
+      std::cout << "hint: run `popy resign` to sign pre-upgrade sidecars\n";
+    }
+  }
+  return ok ? 0 : 1;
+}
+
+// `popy resign` — one-time TOFU migration: sign every UNSIGNED sidecar.
+// An invalid signature is never overwritten — that is tamper evidence and is
+// reported with exit 1.
+int cmd_resign(const Args& a) {
+  auto cfg = popy::config::load_default_path();
+  auto key = popy::keyring::load_or_create(popy::paths::key_file());
+  auto entries = popy::store::list(cfg);
+
+  int signed_count = 0, ok_count = 0, tampered = 0;
+  json results = json::array();
+  for (const auto& e : entries) {
+    std::string popy_name = e.popy_path.filename().string();
+    auto v = popy::attest::verify(e.record, popy_name, key);
+    if (v == popy::attest::VerifyResult::ok) {
+      ++ok_count;
+      continue;
+    }
+    if (v == popy::attest::VerifyResult::missing_signature) {
+      popy::sidecar::Record r = e.record;
+      popy::attest::sign(r, popy_name, key);
+      popy::sidecar::write_atomic(e.sidecar_path, r);
+      ++signed_count;
+      results.push_back({{"id", e.record.id}, {"action", "signed"}});
+      continue;
+    }
+    ++tampered;
+    results.push_back({{"id", e.record.id}, {"action", "tamper-detected"}});
+    std::cerr << "popy resign: NOT overwriting invalid signature on "
+              << e.record.id << " (" << popy_name
+              << ") — possible tampering\n";
+  }
+
+  if (has_flag(a, "json")) {
+    std::cout << json{{"signed", signed_count},
+                      {"alreadyValid", ok_count},
+                      {"tamperDetected", tampered},
+                      {"results", results}}.dump(2) << "\n";
+  } else {
+    std::cout << "signed=" << signed_count
+              << " already-valid=" << ok_count
+              << " tamper-detected=" << tampered << "\n";
+  }
+  return tampered > 0 ? 1 : 0;
 }
 
 int cmd_config(const Args& a) {
@@ -622,6 +744,8 @@ int run(int argc, char** argv) {
     if (sub == "release") return cmd_release(a);
     if (sub == "delete")  return cmd_delete(a);
     if (sub == "read")    return cmd_read(a);
+    if (sub == "verify")  return cmd_verify(a);
+    if (sub == "resign")  return cmd_resign(a);
     if (sub == "status")  return cmd_status(a);
     if (sub == "config")  return cmd_config(a);
     if (sub == "pause" || sub == "resume") return cmd_pause_resume(sub, a);

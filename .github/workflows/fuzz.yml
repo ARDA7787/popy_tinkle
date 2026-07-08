@@ -18,8 +18,10 @@ jobs:
       - name: Configure fuzz targets
         run: cmake -S popyd -B popyd/build-fuzz -DCMAKE_BUILD_TYPE=Debug -DPOPY_FUZZ=ON -DCMAKE_CXX_COMPILER=clang++ -G Ninja
       - name: Build fuzz targets
-        run: cmake --build popyd/build-fuzz --target fuzz_sidecar fuzz_mime -j$(nproc)
+        run: cmake --build popyd/build-fuzz --target fuzz_sidecar fuzz_mime fuzz_attest -j$(nproc)
       - name: Run fuzz_sidecar
         run: popyd/build-fuzz/fuzz_sidecar -max_total_time=60 -max_len=65536
       - name: Run fuzz_mime
         run: popyd/build-fuzz/fuzz_mime -max_total_time=60 -max_len=32
+      - name: Run fuzz_attest
+        run: popyd/build-fuzz/fuzz_attest -max_total_time=60 -max_len=1024
