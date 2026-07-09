@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Developer Guide - popy_tinkle</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind Typography plugin for beautifully formatting HTML text -->
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+    <style>
+        /* Custom scrollbar and subtle tweaks */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+        html { scroll-behavior: smooth; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900 font-sans antialiased min-h-screen flex flex-col">
+
+    <!-- Header Navigation -->
+    <header class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="max-w-4xl mx-auto px-6 py-4 flex justify-between items-center">
+            <div class="font-bold text-xl text-indigo-600 tracking-tight">popy_tinkle</div>
+            <nav class="text-sm font-medium text-gray-500">
+                <a href="https://github.com/arda7787/popy_tinkle" class="hover:text-indigo-600 transition-colors">GitHub Repository</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow w-full max-w-4xl mx-auto px-6 py-12">
+        <article class="prose prose-indigo prose-lg max-w-none bg-white p-8 md:p-12 rounded-2xl shadow-sm border border-gray-100">
+            
+            <h1 class="text-4xl font-extrabold tracking-tight text-gray-900 mb-4">Developer Guide for popy_tinkle</h1>
+            
+            <p class="text-xl text-gray-500 mb-8">
+                Welcome to the <code>popy_tinkle</code> developer documentation! This guide is intended for engineers, contributors, and maintainers who want to build, test, and extend the project locally.
+            </p>
+
+            <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-8 rounded-r-lg">
+                <p class="m-0 text-blue-800 text-sm">
+                    <strong>Note:</strong> If you are looking for high-level design concepts, please refer to our Architecture Document or the Threat Model.
+                </p>
+            </div>
+
+            <h2>Table of Contents</h2>
+            <ul>
+                <li><a href="#1-system-overview">1. System Overview</a></li>
+                <li><a href="#2-prerequisites">2. Prerequisites</a></li>
+                <li><a href="#3-local-development-setup">3. Local Development Setup</a>
+                    <ul>
+                        <li><a href="#browser-extension">Browser Extension</a></li>
+                        <li><a href="#native-daemon-popyd">Native Daemon (<code>popyd</code>)</a></li>
+                    </ul>
+                </li>
+                <li><a href="#4-project-structure">4. Project Structure</a></li>
+                <li><a href="#5-core-subsystems">5. Core Subsystems</a></li>
+                <li><a href="#6-testing-quality-assurance">6. Testing & Quality Assurance</a></li>
+                <li><a href="#7-fuzzing">7. Fuzzing</a></li>
+                <li><a href="#8-continuous-integration-ci">8. Continuous Integration (CI)</a></li>
+            </ul>
+
+            <hr>
+
+            <h2 id="1-system-overview">1. System Overview</h2>
+            <p><code>popy_tinkle</code> operates as a split-architecture system:</p>
+            <ul>
+                <li><strong>The Browser Extension:</strong> A Manifest V3 extension built with TypeScript and Vite. It handles web request interception (via Declarative Net Request), metadata management, and user interfaces (Dashboard, Popup, Onboarding). It leverages the Origin Private File System (OPFS) for safe, localized storage.</li>
+                <li><strong>The Native Daemon (<code>popyd</code>):</strong> A C++ system service that acts as a powerful companion to the extension. It manages cryptography (HMAC, keyrings), safe file system operations, file watching (<code>fsevents</code> for macOS, <code>inotify</code> for Linux), and sandboxed rendering (Markdown, PDF, Images).</li>
+            </ul>
+
+            <h2 id="2-prerequisites">2. Prerequisites</h2>
+            <p>Before setting up the project, ensure you have the following installed on your development machine:</p>
+            
+            <p><strong>For the Browser Extension:</strong></p>
+            <ul>
+                <li><a href="https://nodejs.org/" target="_blank" rel="noopener noreferrer">Node.js</a> (v18 or higher recommended)</li>
+                <li><code>npm</code> or <code>yarn</code></li>
+            </ul>
+
+            <p><strong>For the Native Daemon (<code>popyd</code>):</strong></p>
+            <ul>
+                <li>A modern C++17/C++20 compatible compiler (Clang, GCC, or MSVC)</li>
+                <li><a href="https://cmake.org/" target="_blank" rel="noopener noreferrer">CMake</a> (v3.15+)</li>
+                <li>Make or Ninja build system</li>
+                <li>Python 3.x (for running the MCP server hooks)</li>
+            </ul>
+
+            <h2 id="3-local-development-setup">3. Local Development Setup</h2>
+
+            <h3 id="browser-extension">Browser Extension</h3>
+            <p>The extension is located at the root of the repository.</p>
+            <ol>
+                <li>
+                    <strong>Install dependencies:</strong>
+<pre><code>npm install</code></pre>
+                </li>
+                <li>
+                    <strong>Run the development server:</strong>
+<pre><code>npm run dev</code></pre>
+                    <p><em>This uses Vite to watch for file changes in <code>src/</code> and output a hot-reloaded build.</em></p>
+                </li>
+                <li>
+                    <strong>Load in the Browser:</strong>
+                    <ul>
+                        <li>Open Chrome/Edge and navigate to <code>chrome://extensions/</code>.</li>
+                        <li>Enable "Developer mode" in the top right.</li>
+                        <li>Click "Load unpacked" and select the generated <code>dist/</code> directory (or wherever Vite is configured to output the build).</li>
+                    </ul>
+                </li>
+            </ol>
+
+            <h3 id="native-daemon-popyd">Native Daemon (<code>popyd</code>)</h3>
+            <p>The C++ companion app is located in the <code>/popyd</code> directory.</p>
+            <ol>
+                <li>
+                    <strong>Configure the build with CMake:</strong>
+<pre><code>cd popyd
+mkdir build && cd build
+cmake ..</code></pre>
+                </li>
+                <li>
+                    <strong>Compile the daemon:</strong>
+<pre><code>make -j$(nproc)</code></pre>
+                </li>
+                <li>
+                    <strong>Configuration:</strong>
+                    <p>Copy the example configuration file to your working directory before running:</p>
+<pre><code>cp ../dist/config.example.toml ./config.toml</code></pre>
+                </li>
+                <li>
+                    <strong>Run locally (in foreground):</strong>
+<pre><code>./popyd --config ./config.toml</code></pre>
+                </li>
+            </ol>
+            <p><em>(Note: To install as a system service, see <code>dist/com.popy.daemon.plist</code> for macOS or <code>dist/popyd.service</code> for Linux).</em></p>
+
+            <h2 id="4-project-structure">4. Project Structure</h2>
+            <p>Understanding the repository layout is critical for navigating the codebase.</p>
+<pre><code>popy_tinkle/
+├── src/                    # Browser Extension Source
+│   ├── background/         # Service worker scripts
+│   ├── dashboard/          # Full-page dashboard UI (HTML/CSS/TS)
+│   ├── lib/                # Shared extension logic
+│   │   ├── dnr/            # Declarative Net Request rules generator
+│   │   ├── interceptor/    # Host matching and classification logic
+│   │   ├── metadata/       # Preferences and expiring metadata store
+│   │   └── opfs/           # Origin Private File System wrapper
+│   ├── offscreen/          # Offscreen documents for background DOM parsing
+│   ├── onboarding/         # First-time user setup flows
+│   └── popup/              # Extension action popup UI
+├── public/                 # Static assets (icons)
+├── tests/                  # TypeScript/Vitest test suite
+└── popyd/                  # Native Daemon Source (C++)
+    ├── src/
+    │   ├── cli/            # Command-line interface definitions
+    │   ├── core/           # Core utilities (Crypto, Log, UUID, Safe FS)
+    │   ├── ipc/            # Inter-process communication logic
+    │   ├── net/            # Network fetching utilities
+    │   ├── render/         # Sandboxed renderers (Image, PDF, Markdown)
+    │   ├── store/          # File quarantine implementation
+    │   └── watch/          # OS-specific FS watchers (fsevents, inotify)
+    ├── tests/              # C++ Unit tests and Fuzzers
+    ├── mcp/                # Model Context Protocol python server
+    ├── dist/               # Deployment artifacts (.plist, .service, .sh)
+    └── third_party/        # C++ header-only libraries (JSON, TOML, stb)</code></pre>
+
+            <h2 id="5-core-subsystems">5. Core Subsystems</h2>
+
+            <h3>Interception & Classification (Extension)</h3>
+            <p>Web request interception is primarily handled via Chrome's Declarative Net Request (DNR) API. Logic in <code>src/lib/interceptor/</code> dynamically evaluates host metadata (<code>hostMatch.ts</code>) and categorizes traffic (<code>classifier.ts</code>).</p>
+
+            <h3>File Quarantine (<code>popyd</code>)</h3>
+            <p>When untrusted files are downloaded or processed, <code>popyd</code> isolates them using <code>src/store/quarantine.cpp</code>. All file system operations must pass through <code>src/core/safe_fs.cpp</code> to prevent directory traversal attacks and ensure proper permissions.</p>
+
+            <h3>Sandboxed Rendering (<code>popyd</code>)</h3>
+            <p>Parsing external formats (PDF, Images, MD) is inherently risky. Code in <code>src/render/</code> operates under strict security boundaries. If you are adding a new file format parser, you <strong>must</strong> implement it within <code>src/render/sandbox.cpp</code>.</p>
+
+            <h2 id="6-testing-quality-assurance">6. Testing & Quality Assurance</h2>
+            <p>We maintain strict testing requirements for both environments.</p>
+
+            <h3>Extension Tests (Vitest)</h3>
+            <p>Unit tests for the extension are located in <code>/tests/</code>.</p>
+<pre><code># Run all TypeScript tests
+npm run test
+
+# Run tests in watch mode
+npm run test:watch</code></pre>
+
+            <h3>Daemon Tests (CTest)</h3>
+            <p>C++ tests are located in <code>/popyd/tests/</code>.</p>
+<pre><code>cd popyd/build
+make test
+# OR use CTest directly for verbose output
+ctest --output-on-failure</code></pre>
+
+            <h2 id="7-fuzzing">7. Fuzzing</h2>
+            <p>Because <code>popyd</code> handles untrusted inputs (MIME parsing, IPC messages, sidecar execution), we utilize fuzz testing. Fuzzers are located in <code>popyd/tests/fuzz/</code>.</p>
+            <p>To run the fuzzers locally (requires Clang with LibFuzzer):</p>
+            <ol>
+                <li>Configure CMake with fuzzing enabled (e.g., <code>-DENABLE_FUZZING=ON</code>).</li>
+                <li>Build the fuzz targets: <code>make fuzz_mime fuzz_attest fuzz_sidecar</code></li>
+                <li>Execute the target: <code>./fuzz_mime</code></li>
+            </ol>
+
+            <h2 id="8-continuous-integration-ci">8. Continuous Integration (CI)</h2>
+            <p>All pull requests must pass our automated GitHub Actions pipelines located in <code>.github/workflows/</code>:</p>
+            <ul>
+                <li><code>ci.yml</code>: Runs linters, Vitest (Extension), and CTest (Daemon).</li>
+                <li><code>fuzz.yml</code>: Runs regression fuzzing on C++ targets.</li>
+                <li><code>release.yml</code>: Automates packaging of the extension (<code>.zip</code>) and compiled binaries for tagged releases.</li>
+            </ul>
+            <p>Please ensure your code compiles cleanly and passes all local tests before opening a Pull Request. For detailed PR guidelines, see <code>CONTRIBUTING.md</code>.</p>
+
+        </article>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-gray-200 mt-auto">
+        <div class="max-w-4xl mx-auto px-6 py-6 text-center text-sm text-gray-500">
+            &copy; <script>document.write(new Date().getFullYear())</script> popy_tinkle. All rights reserved.
+        </div>
+    </footer>
+
+</body>
+</html>
