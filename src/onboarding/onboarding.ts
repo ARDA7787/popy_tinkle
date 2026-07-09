@@ -16,6 +16,6 @@ document.getElementById("done")!.addEventListener("click", async () => {
 document.getElementById("docs")!.addEventListener("click", (e) => {
   e.preventDefault();
   chrome.tabs.create({
-    url: "https://github.com/ARDA7787/popy_tinkle/blob/main/THREAT_MODEL.md",
+    url: "https://github.com/ARDA7787/popy_tinkle#what-popy-does-not-do",
   });
 });

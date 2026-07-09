@@ -2,11 +2,7 @@
   "name": "popy",
   "version": "0.1.0",
   "description": "A browser download quarantine — every file lands in an isolated OPFS sandbox, renamed with _popy, and cannot be opened until you release it.",
-  "license": "Apache-2.0",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/ARDA7787/popy_tinkle.git"
-  },
+  "private": true,
   "scripts": {
     "dev": "vite build --watch --mode development",
     "build": "vite build",

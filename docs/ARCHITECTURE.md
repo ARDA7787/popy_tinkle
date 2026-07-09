@@ -1,6 +1,6 @@
 # Architecture
 
-A one-page map of how Popy is wired. For what is and isn't mitigated, see `THREAT_MODEL.md`.
+A one-page map of how Popy is wired.
 
 ## Boundary
 
